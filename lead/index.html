@@ -53,6 +53,7 @@ pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;background
 .qr{display:flex;flex-wrap:wrap;align-items:center;gap:.9rem}
 .qr img{border-radius:12px;background:#fff;padding:6px;border:1px solid var(--line);max-width:100%;height:auto}
 .qr p{flex:1 1 12rem;min-width:0}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 [hidden]{display:none!important}
 footer{max-width:68rem;margin-inline:auto;padding:0 1rem 2.5rem;color:var(--ink-2);font-size:.8438rem}
 </style>
@@ -94,12 +95,13 @@ footer{max-width:68rem;margin-inline:auto;padding:0 1rem 2.5rem;color:var(--ink-
       <div class="field"><label for="tel">เบอร์โทร (ไม่บังคับ)</label><input id="tel" type="tel" maxlength="20" autocomplete="tel" inputmode="tel"></div>
       <label class="consent" for="ok"><input id="ok" type="checkbox"><span>ยินยอมให้ JST ERP ใช้ข้อมูลนี้เพื่อติดต่อกลับเรื่องระบบหลังร้านเท่านั้น และขอให้ลบข้อมูลได้ทุกเมื่อโดยแจ้งทาง LINE</span></label>
       <p class="err" id="err" role="alert"></p>
-      <button class="btn btn-main" type="submit">ถัดไป: ส่งทาง LINE</button>
-      <p class="note">หน้านี้ไม่เก็บข้อมูลของคุณ ข้อมูลจะถูกส่งเมื่อคุณกดส่งข้อความใน LINE เอง</p>
+      <div class="hp" aria-hidden="true"><label for="website">เว้นว่างช่องนี้</label><input id="website" type="text" tabindex="-1" autocomplete="off"></div>
+      <button class="btn btn-main" type="submit" id="go">ถัดไป: ส่งทาง LINE</button>
+      <p class="note" id="keepnote">หน้านี้ไม่เก็บข้อมูลของคุณ ข้อมูลจะถูกส่งเมื่อคุณกดส่งข้อความใน LINE เอง</p>
     </form>
     <div class="done" id="done" hidden>
-      <h2>ตรวจข้อความ แล้วส่งทาง LINE</h2>
-      <p class="note">ขั้นตอน: 1) กดปุ่มสีเขียว 2) เพิ่มเพื่อนใน LINE 3) วางข้อความในแชตแล้วกดส่ง</p>
+      <h2 id="doneh">ตรวจข้อความ แล้วส่งทาง LINE</h2>
+      <p class="note" id="donesteps">ขั้นตอน: 1) กดปุ่มสีเขียว 2) เพิ่มเพื่อนใน LINE 3) วางข้อความในแชตแล้วกดส่ง</p>
       <pre id="msg" tabindex="0"></pre>
       <div class="row">
         <a class="btn btn-line" id="line" href="#" target="_blank" rel="noopener">คัดลอกและเปิด LINE</a>
@@ -115,6 +117,9 @@ footer{max-width:68rem;margin-inline:auto;padding:0 1rem 2.5rem;color:var(--ink-
 <script>
 (function () {
   var LINE_URL = 'https://line.me/ti/p/v-TPXtXKuU';
+  var SHEET_URL = '';  /* ลิงก์ Web app ของ Google Apps Script (ลงท้ายด้วย /exec) */
+  var sent = false;
+  if (SHEET_URL) { document.getElementById('keepnote').textContent = 'เมื่อกดส่ง ข้อมูลในฟอร์มนี้จะถูกบันทึกเพื่อใช้ติดต่อกลับ'; document.getElementById('go').textContent = 'ส่งข้อมูล'; }
   function $(id) { return document.getElementById(id); }
   var f = $('f'), done = $('done'), text = '';
   f.addEventListener('submit', function (e) {
@@ -136,6 +141,14 @@ footer{max-width:68rem;margin-inline:auto;padding:0 1rem 2.5rem;color:var(--ink-
     var a = $('line');
     a.href = LINE_URL;
     $('hint').textContent = 'กดปุ่มสีเขียว ระบบจะคัดลอกข้อความให้และเปิด LINE ของทีมขาย จากนั้นกดเพิ่มเพื่อน แล้ววางข้อความในแชตและกดส่ง';
+    if (SHEET_URL && !sent && !$('website').value) {
+      var src = '';
+      try { var q = new URLSearchParams(location.search); src = (q.get('utm_source') || q.get('src') || '').slice(0, 60); } catch (e2) { src = ''; }
+      var body = new URLSearchParams({ shop: shop, channels: ch.join(', '), orders: $('orders').value, warehouse: $('wh').value, pain: $('pain').value.trim(), name: name, tel: $('tel').value.trim(), source: src, page: location.pathname });
+      var go = $('go'); go.disabled = true; go.textContent = 'กำลังส่ง';
+      fetch(SHEET_URL, { method: 'POST', mode: 'no-cors', body: body }).then(function () { sent = true; $('doneh').textContent = 'ส่งข้อมูลแล้ว ทีมงานจะติดต่อกลับ'; $('donesteps').textContent = 'ถ้าต้องการคุยทันที กดปุ่มสีเขียวเพื่อเปิด LINE แล้ววางข้อความด้านล่าง'; }, function () { $('doneh').textContent = 'ส่งข้อมูลอัตโนมัติไม่สำเร็จ กรุณาส่งทาง LINE แทน'; }).then(function () { go.disabled = false; go.textContent = 'ส่งข้อมูล'; f.hidden = true; done.hidden = false; $('msg').focus(); });
+      return;
+    }
     f.hidden = true; done.hidden = false; $('msg').focus();
   });
   $('line').addEventListener('click', function () { try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(function () {}); } catch (e) {} });
