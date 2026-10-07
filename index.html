@@ -2316,7 +2316,48 @@ label.btn{cursor:pointer}
     var reason = ad && sc <= 0 ? 'ข้อความมีลักษณะเป็นโฆษณาของผู้ให้บริการ ไม่น่าใช่ผู้ที่กำลังหาระบบ' : sc <= 0 ? 'ไม่พบสัญญาณว่าผู้เขียนกำลังมีปัญหาหลังร้านหรือกำลังหาระบบ' : 'พบสัญญาณ ' + sig.length + ' ข้อ' + (pkg !== 'ยังไม่ชัด' ? ' ลักษณะงานไปทาง ' + pkg : '') + (ad ? ' แต่ข้อความมีลักษณะเป็นโฆษณา ให้ตรวจก่อนทัก' : '');
     var q1 = ask[0] || 'ตอนนี้งานส่วนไหนกินเวลาทีมมากที่สุด';
     var opener = sc <= 0 ? '' : 'สวัสดี' + tk.k + ' ' + tk.i + 'ชื่อ' + state.me.name + ' จาก JST ERP ระบบจัดการออเดอร์ สต็อก และคลังสินค้าสำหรับร้านออนไลน์' + tk.k + '\n' + (pain ? 'เห็นที่เล่า' + pain + ' ' : 'เห็นโพสต์ของคุณ ') + 'ขออนุญาตถามสั้น ๆ ' + tk.k + 'ว่า' + q1 + tk.q + ' จะได้แนะนำข้อมูลที่ตรงกับร้าน ถ้ายังไม่สะดวกคุย บอก' + tk.i + 'ได้เลย' + tk.k;
-    return { score: score, reason: reason, shop: '', biz: '', pkg: pkg, signals: sig.slice(0, 5), ask: ask, opener: opener, rule: true };
+    var keys = [];
+    if (/สต็อกไม่ตรง|สต๊อกไม่ตรง|ขายเกิน|ตัดสต็อก|ตัดสต๊อก/.test(tl)) keys.push('stock');
+    if (/หยิบผิด|แพ็กผิด|แพ็คผิด|ส่งผิด|ส่งไม่ครบ|หาของไม่เจอ|พนักงานคลัง|โกดัง|คลังสินค้า|จัดคลัง/.test(tl)) keys.push('wh');
+    if (/fulfillment|ฟูลฟิล|รับฝากสินค้า|แพ็กส่งให้ร้าน/.test(tl)) keys.push('ff');
+    if (/ออเดอร์เยอะ|ออเดอร์ล้น|แพ็กไม่ทัน|แพ็คไม่ทัน|ตอบไม่ทัน|รับสมัคร/.test(tl)) keys.push('load');
+    if (/หลายแพลตฟอร์ม|หลายช่องทาง|หลายร้าน|เปิดทีละร้าน|เช็กทีละร้าน/.test(tl)) keys.push('multi');
+    if (/ไลฟ์|\bcf\b/.test(tl)) keys.push('live');
+    if (/หาระบบ|แนะนำระบบ|แนะนำโปรแกรม|มีระบบไหน|ระบบไหนดี|โปรแกรมไหนดี|ใช้ระบบอะไร/.test(tl)) keys.push('seek');
+    var plats = [['Shopee', /shopee|ช้อปปี้/], ['Lazada', /lazada|ลาซาด้า/], ['TikTok Shop', /tiktok|ติ๊กต็อก/], ['Facebook', /facebook|เฟซบุ๊ก|เฟสบุ๊ค/], ['LINE', /line shopping|ไลน์/]].filter(function (x) { return x[1].test(tl); }).map(function (x) { return x[0]; });
+    var om = /วันละ\s*(ประมาณ|ราว)?\s*(\d[\d,]*)|(\d[\d,]*)\s*(ออเดอร์|ออร์เดอร์)\s*(ต่อวัน|\/วัน)/.exec(tl), ord = om ? parseInt((om[2] || om[3]).replace(/,/g, ''), 10) : 0;
+    return { score: score, reason: reason, shop: '', biz: '', pkg: pkg, signals: sig.slice(0, 5), ask: ask, opener: opener, rule: true, keys: keys, plats: plats, ord: ord };
+  }
+  /* แต่งข้อความทักจากข้อมูลในโพสต์และเนื้อหาหลักสูตร โดยไม่ใช้ AI: style 0 = แชต, 1 = สุภาพ, 2 = ทางการ */
+  function leadCompose(r, style, seed) {
+    var tk = TOKENS[state.particle], n = seed * 7 + style * 3, me = state.me.name;
+    function pk(a) { n++; return a[n % a.length]; }
+    var k = r.keys[0] || 'seek', plat = r.plats.length ? (r.plats.length > 2 ? r.plats.slice(0, -1).join(', ') + ' และ ' + r.plats[r.plats.length - 1] : r.plats.join(' และ ')) : '';
+    var HOOK = {
+      stock: ['เห็นที่เล่าว่าสต็อกแต่ละช่องทางไม่ตรงกัน', 'อ่านเจอเรื่องสต็อกไม่ตรงที่โพสต์ไว้', 'เรื่องขายเกินสต็อกที่เล่าไว้ น่าจะเหนื่อยไม่น้อย'],
+      wh: ['เห็นที่เล่าเรื่องหยิบและแพ็กของในคลัง', 'อ่านเจอเรื่องงานคลังที่โพสต์ไว้', 'เรื่องส่งของผิดที่เล่าไว้ เป็นปัญหาที่หลายคลังเจอเมื่อออเดอร์เพิ่ม'],
+      ff: ['เห็นว่าดูแลสินค้าให้หลายร้านในคลังเดียว', 'อ่านเจอเรื่องงาน Fulfillment ที่โพสต์ไว้'],
+      load: ['เห็นว่าออเดอร์เริ่มเยอะจนทีมรับไม่ทัน', 'อ่านเจอที่เล่าว่าแพ็กไม่ทันช่วงออเดอร์เข้า', 'ยินดีด้วยที่ออเดอร์โต ช่วงนี้หลังร้านมักเป็นจุดที่ตึงที่สุด'],
+      multi: ['เห็นว่าต้องดูแลหลายร้านหลายช่องทางพร้อมกัน', 'อ่านเจอเรื่องการเปิดหลังร้านทีละแพลตฟอร์ม'],
+      live: ['เห็นว่าขายผ่านไลฟ์และต้องตามออเดอร์จากคอมเมนต์', 'อ่านเจอเรื่องออเดอร์จากไลฟ์ที่โพสต์ไว้'],
+      seek: ['เห็นโพสต์ที่กำลังมองหาระบบหลังร้าน', 'อ่านเจอคำถามเรื่องระบบจัดการร้านที่โพสต์ไว้']
+    };
+    var VALUE = {
+      stock: ['ระบบของเราซิงก์สต็อกทุกแพลตฟอร์มไว้ที่เดียว ช่วยลดการขายเกินสต็อกช่วงแคมเปญ', 'JST ERP รวมสต็อกของทุกร้านไว้ที่เดียว พอมีออเดอร์เข้าช่องทางไหน ยอดคงเหลือของช่องทางอื่นจะอัปเดตตาม'],
+      wh: ['ระบบคลังของเรากำหนดตำแหน่งสินค้าบนชั้นวาง และใช้เครื่อง PDA สแกนตอนหยิบและแพ็ก ช่วยลดการหยิบผิด', 'JST ERP มีใบหยิบสินค้าตามเงื่อนไขและการสแกนตรวจก่อนแพ็ก พนักงานใหม่จึงหาของได้ตามตำแหน่งโดยไม่ต้องจำ'],
+      ff: ['ระบบคลังของเรารองรับเจ้าของสินค้าหลายรายในคลังเดียว แยกสต็อกและออเดอร์ของแต่ละร้านได้', 'JST ERP ออกแบบมาสำหรับคลังที่ดูแลหลายร้าน เปิดบัญชีแยกให้เจ้าของสินค้าแต่ละรายได้'],
+      load: ['ระบบของเรารวมออเดอร์จากทุกช่องทางและจัดคิวหยิบแพ็กให้ ช่วยให้ทีมเดิมรับออเดอร์ได้มากขึ้น', 'JST ERP ช่วยลดงานซ้ำตอนรับออเดอร์และพิมพ์ใบปะหน้า ทีมจะมีเวลากับการแพ็กมากขึ้น'],
+      multi: ['ระบบของเรารวมออเดอร์และสต็อกจากทุกช่องทางไว้ในหน้าจอเดียว โดยไม่จำกัดจำนวนร้านและผู้ใช้งาน', 'JST ERP ดึงออเดอร์จากทุกร้านมารวมกัน ไม่ต้องเปิดหลังร้านทีละแพลตฟอร์ม'],
+      live: ['ระบบของเราดึงออเดอร์จากคอมเมนต์ไลฟ์และเช็กสต็อกให้อัตโนมัติ', 'JST ERP มีระบบดึงคอมเมนต์ CF พร้อมตัดสต็อก ช่วยลดออเดอร์ตกหล่นระหว่างไลฟ์'],
+      seek: ['JST ERP เป็นระบบหลังร้านที่รวมออเดอร์ สต็อก และคลังสินค้าไว้ในระบบเดียว', 'ระบบของเราดูแลตั้งแต่รับออเดอร์ ซิงก์สต็อก จนถึงหยิบแพ็กในคลัง']
+    };
+    var q = r.ask[0] || 'ตอนนี้งานส่วนไหนกินเวลาทีมมากที่สุด';
+    if (r.ord && r.ask.length > 1) q = r.ask[1];
+    var mirror = (plat ? 'เห็นว่าขายอยู่ที่ ' + plat : '') + (r.ord ? (plat ? ' และ' : 'เห็นว่า') + 'ออเดอร์ราววันละ ' + money(r.ord) : '');
+    var hook = pk(HOOK[k]), val = pk(VALUE[k]);
+    if (style === 0) return pk(['สวัสดี' + tk.k, 'หวัดดี' + tk.k, 'สวัสดี' + tk.k + ' ขออนุญาตทักนะ' + tk.q]) + ' ' + hook + tk.k + '\n' + tk.i + 'ชื่อ' + me + ' จาก JST ERP ' + tk.k + ' ' + pk(['ขอถามนิดเดียว', 'ขอถามหน่อย', 'สงสัยอยู่อย่างหนึ่ง']) + 'ว่า' + q + tk.q + '\n' + pk(['ถ้าไม่สะดวกคุย ข้ามข้อความนี้ได้เลย' + tk.k, 'ไม่ได้จะขายของทันที' + tk.k + ' อยากเข้าใจหน้างานก่อน', 'ถ้ายังไม่ใช่จังหวะ บอก' + tk.i + 'ได้ตรง ๆ เลย' + tk.k]);
+    if (style === 1) return 'สวัสดี' + tk.k + ' ' + tk.i + 'ชื่อ' + me + ' จาก JST ERP ' + tk.k + '\n' + hook + (mirror ? ' ' + mirror + ' ' : '') + tk.k + ' ' + val + tk.k + '\n' + pk(['ขออนุญาตถามเพื่อให้แนะนำได้ตรง', 'ก่อนจะแนะนำอะไร ขอถามก่อน', 'เพื่อไม่ให้แนะนำเกินความจำเป็น ขอถาม']) + 'ว่า' + q + tk.q + '\n' + pk(['ถ้าฟังแล้วร้านยังไม่จำเป็นต้องใช้ระบบ ' + tk.i + 'จะบอกตรง ๆ ' + tk.k, 'สะดวกคุยทางแชตนี้ หรือให้' + tk.i + 'โทรไปช่วงไหนดี' + tk.q, 'ใช้เวลาคุยไม่เกิน 10 นาที' + tk.k]);
+    return 'เรียน เจ้าของร้าน\n\n' + tk.i + 'ชื่อ' + me + ' จากทีมขาย JST ERP ขออนุญาตติดต่อเนื่องจาก' + hook.replace(/^เห็น(ที่เล่า|ว่า|โพสต์ที่)?|^อ่านเจอ/, 'พบข้อความเกี่ยวกับ').replace(/ที่โพสต์ไว้|ที่เล่าไว้.*$/, '') + ' ' + val + '\n\nเพื่อให้ข้อมูลที่ตรงกับธุรกิจของท่าน ' + tk.i + 'ขอเรียนถามว่า' + q + ' หากท่านสะดวก ' + tk.i + 'ยินดีนัดหมายอธิบายเพิ่มเติมประมาณ 15 นาที\n\nขอแสดงความนับถือ\n' + me + '\nJST ERP';
   }
   function viewLeads() {
     if (!state.leads) state.leads = { kw: '', text: '', src: '', res: null, busy: false, note: '' };
@@ -2359,7 +2400,15 @@ label.btn{cursor:pointer}
         h('div', { class: 'gate-body stack' }, h('p', { text: r.reason || '' }),
           r.signals.length ? h('div', null, h('span', { class: 'label', text: 'สัญญาณที่พบ' }), h('ul', { class: 'notes' }, r.signals.map(function (x) { return h('li', { text: x }); }))) : null,
           r.ask.length ? h('div', null, h('span', { class: 'label', text: 'ควรถามเพิ่ม' }), h('ul', { class: 'notes' }, r.ask.map(function (x) { return h('li', { text: x }); }))) : null)));
-      if (r.opener) out.appendChild(card);
+      if (r.rule && r.opener) {
+        if (L.seed == null) L.seed = Math.floor(Math.random() * 9);
+        var again = h('button', { type: 'button', class: 'btn', text: 'สร้างประโยคใหม่' });
+        again.addEventListener('click', function () { L.seed++; paint(); });
+        out.appendChild(h('div', { class: 'btn-row' }, h('h2', { class: 'h2', text: 'ข้อความทักครั้งแรก 3 แบบ' }), again));
+        [['แบบแชต สั้นและเป็นกันเอง', 'เหมาะกับคอมเมนต์หรือข้อความแรกในแชต ถามก่อน ยังไม่เสนอขาย'], ['แบบสุภาพ บอกสิ่งที่ช่วยได้', 'อ้างถึงสิ่งที่เขาเล่าเอง บอกสิ่งที่ระบบช่วยได้หนึ่งเรื่อง แล้วจบด้วยคำถาม'], ['แบบทางการ สำหรับอีเมลหรือเพจธุรกิจ', 'ใช้เมื่อผู้รับเป็นบริษัทหรือยังไม่เคยคุยกัน']].forEach(function (x, i) { out.appendChild(scriptNode([x[0], leadCompose(r, i, L.seed), x[1]], 'ร่างจากข้อมูลในโพสต์')); });
+        var rel = showHits(searchKb(L.text)).slice(0, 3);
+        if (rel.length) out.appendChild(h('div', { class: 'qa-src' }, h('span', { class: 'label', text: 'อ่านเพิ่มในหลักสูตรก่อนทัก' }), h('ul', null, rel.map(function (p2) { return h('li', null, h('a', { href: '#ch-' + p2.ch, text: 'บทที่ ' + p2.ch + ' · ' + p2.kind + ' · ' + p2.title })); }))));
+      } else if (r.opener) out.appendChild(card);
       out.appendChild(h('div', { class: 'btn-row' }, save));
     }
     var form = h('form', { class: 'sheet', novalidate: true }, h('div', { class: 'form-grid' }, fField('ข้อความที่พบ', ta, true), fField('แหล่งที่พบ', src, true)), h('div', { class: 'sheet-row sheet-actions' }, particleField('particle-leads'), h('div', { class: 'btn-row' }, send)));
@@ -2368,7 +2417,7 @@ label.btn{cursor:pointer}
       L.text = ta.value; L.src = src.value.trim();
       if (L.busy) return;
       if (L.text.trim().length < 10) { L.note = 'วางข้อความที่พบก่อน อย่างน้อย 1 ประโยค'; L.res = null; paint(); ta.focus(); return; }
-      if (aiOff) { L.note = ''; L.res = leadRule(L); paint(); return; }
+      if (aiOff) { L.note = ''; L.seed = null; L.res = leadRule(L); paint(); return; }
       L.busy = true; L.note = ''; L.res = null; paint();
       auth.samplePromise.then(function (sample) {
         if (!sample || typeof sample.json !== 'function') { L.busy = false; L.note = ''; L.res = leadRule(L); if (state.leads === L && out.isConnected) paint(); return null; }
@@ -2379,7 +2428,7 @@ label.btn{cursor:pointer}
         }, function (e2) { L.res = leadRule(L); L.note = ''; }).then(function () { L.busy = false; if (state.leads === L && out.isConnected) paint(); });
       });
     });
-    root.appendChild(h('section', { class: 'stack' }, h('h2', { class: 'h2', text: aiOff ? '2. วางข้อความที่เจอ เพื่อประเมินเบื้องต้น' : '2. วางข้อความที่เจอ ให้ AI ช่วยประเมิน' }), aiOff ? h('p', { class: 'muted', text: 'เครื่องนี้ใช้ AI ไม่ได้ ระบบจะประเมินจากคำสำคัญในข้อความ เช่น สต็อกไม่ตรง หยิบผิด หลายแพลตฟอร์ม แล้วร่างข้อความทักจากแม่แบบ ผลจะหยาบกว่า AI ให้อ่านทวนก่อนใช้' }) : null, form, out));
+    root.appendChild(h('section', { class: 'stack' }, h('h2', { class: 'h2', text: aiOff ? '2. วางข้อความที่เจอ เพื่อประเมินเบื้องต้น' : '2. วางข้อความที่เจอ ให้ AI ช่วยประเมิน' }), aiOff ? h('p', { class: 'muted', text: 'เครื่องนี้ใช้ AI ไม่ได้ ระบบจะประเมินจากสิ่งที่ข้อความเล่า เช่น สต็อกไม่ตรง หยิบผิด หลายแพลตฟอร์ม แล้วแต่งข้อความทัก 3 แบบจากรายละเอียดในโพสต์และเนื้อหาในหลักสูตร กดสร้างประโยคใหม่ได้จนกว่าจะถูกใจ ใช้ได้แม้ไม่มีอินเทอร์เน็ต' }) : null, form, out));
     root.appendChild(h('aside', { class: 'note note-warn' }, h('span', { class: 'tag', text: 'ก่อนทักลูกค้า' }),
       h('p', { text: 'หน้านี้ไม่ได้ดึงข้อมูลจากเว็บเอง คุณเป็นคนค้นและเลือกข้อความมาวาง ให้บันทึกเฉพาะข้อมูลของร้านหรือธุรกิจที่เจ้าของเปิดเผยเอง ไม่เก็บเบอร์หรือข้อมูลส่วนตัวที่เขาไม่ได้ให้ไว้เพื่อการติดต่อ ทำตามกติกาของกลุ่มและแพลตฟอร์มนั้น และหยุดติดต่อเมื่อเขาไม่สนใจ' })));
     paint();
@@ -2491,6 +2540,54 @@ label.btn{cursor:pointer}
         h('div', { class: 'sheet-row sheet-actions' }, particleField('particle-tpl'))),
       out, miss, host);
   }
+  function formalize(w, seed) {
+    var tk = TOKENS[state.particle], me = state.me.name, tone = w.tone, mail = w.ch === 1, n = seed || 0;
+    function pk(a) { n++; return a[n % a.length]; }
+    var t = ' ' + String(w.draft || '').replace(/\r/g, '') + ' ';
+    var subj = /ใบเสนอราคา/.test(t) ? 'ใบเสนอราคา' : /นัด|เดโม|ประชุม/.test(t) ? 'นัดหมาย' : /ชำระ|โอน|จ่าย|ใบแจ้งหนี้/.test(t) ? 'การชำระค่าบริการ' : /สัญญา|ต่ออายุ/.test(t) ? 'สัญญาบริการ' : '[หัวเรื่อง]';
+    /* คำลงท้ายภาษาพูดเป็นจุดแบ่งประโยค */
+    t = t.replace(/(นะครับ|นะคะ|นะค่ะ|นะค้าบ|นะคับ|ครับผม|ค้าบ|คับ|ครับ|คร้าบ|ค่ะ|คะ|ค่า|จ้า|จ้ะ|จ๊ะ|น้า|นะ|เนอะ|งับ|ฮะ|ฮับ)(?=[\s.!?,]|$)/g, '\u00a7');
+    t = t.replace(/[!]+/g, '').replace(/\.{2,}/g, ' ').replace(/5{3,}|ๆๆ+|[~]+/g, '');
+    var R = [
+      [/(^|[\s\u00a7])(พี่|น้อง|เธอ|ตัวเอง|คุณพี่|คุณน้อง|เฮีย|เจ๊)(?=[\s\u00a7])/g, '$1\u00a7'],
+      [/(^|\s)(หนู|เรา|ชั้น|ฉัน|ผม|ดิฉัน|เค้า)(?=[ก-๙])/g, '$1' + tk.i], [/(^|\s)(หนู|เรา|ชั้น|ฉัน|เค้า)(?=\s)/g, '$1' + tk.i],
+      [/ส่ง(ไป)?ให้แล้ว|ส่งไปแล้ว|ส่งแล้ว/g, 'ได้จัดส่งให้เรียบร้อยแล้ว'], [/เดี๋ยว(จะ)?ส่ง/g, 'จะจัดส่ง'], [/เดี๋ยว(จะ)?/g, 'จะ'],
+      [/ถ้า(โอเคร|โอเค|ok|ตกลง)/gi, 'หากเห็นชอบตามนี้ '], [/ไม่ว่าง/g, 'ไม่สะดวก'], [/อีกที/g, 'อีกครั้ง'], [/โทร(ไป|มา|หา)/g, 'โทรศัพท์$1'], [/ขอโทษ(ด้วย)?(?=\s*(\u00a7|$))/g, 'ต้องขออภัยเป็นอย่างสูง'], [/โอเค(ไหม|มั้ย|ป่ะ|ปะ|หรือเปล่า)/g, 'สะดวกตามนี้หรือไม่'], [/โอเค|\bok\b|โอเคร/gi, 'เรียบร้อย'],
+      [/ได้(ไหม|มั้ย|ป่ะ|ปะ|หรือเปล่า|รึเปล่า|ป่าว)/g, 'ได้หรือไม่'], [/(ไหม|มั้ย|ป่ะ|หรือเปล่า|รึเปล่า|ป่าว)(?=[\s\u00a7?]|$)/g, 'หรือไม่'],
+      [/ยังไง|ยังงัย|ไง(?=[\s\u00a7])/g, 'อย่างไร'], [/เท่าไหร่|เท่าไร่|กี่บาท/g, 'เท่าไร'], [/เมื่อไหร่/g, 'เมื่อไร'], [/ทำไม/g, 'เพราะเหตุใด'],
+      [/ตอนนี้/g, 'ขณะนี้'], [/ถ้า/g, 'หาก'], [/ขอโทษ(ด้วย)?/g, 'ขออภัย'], [/ขอบคุณ(มาก|มากๆ|มาก ๆ)/g, 'ขอขอบคุณเป็นอย่างยิ่ง'],
+      [/อยากได้/g, 'ต้องการ'], [/อยาก(จะ)?/g, 'ประสงค์จะ'], [/บอก(ว่า)?/g, 'แจ้ง$1'], [/ช่วย(.{2,40}?)(หน่อย|ที|ด้วย)(?=[\s\u00a7]|$)/g, 'รบกวน$1'],
+      [/แวต|แว็ต|\bvat\b/gi, 'ภาษีมูลค่าเพิ่ม'], [/เซ็น(ต์)?/g, 'ลงนาม'], [/ตังค์|ตัง(?=[\s\u00a7])/g, 'ค่าบริการ'], [/จ่าย/g, 'ชำระ'], [/เช็ก|เช็ค/g, 'ตรวจสอบ'],
+      [/เยอะ/g, 'จำนวนมาก'], [/นิดนึง|นิดหน่อย|แป๊บ(นึง)?/g, 'สักครู่'], [/แบบว่า|ประมาณว่า|คือว่า/g, ''], [/(เลย|กัน|ด้วย)(?=\s*(\u00a7|$))/g, ''],
+      [/ค่อย/g, 'จึง'], [/เอา(ไว้)?/g, 'กำหนด'], [/เจอกัน|เจอ/g, 'พบ'], [/คุยกัน|คุย/g, 'หารือ'], [/รีบ/g, 'เร่ง'], [/ทัก(มา|ไป)?/g, 'ติดต่อ$1']
+    ];
+    R.forEach(function (r) { t = t.replace(r[0], r[1]); });
+    t = t.replace(/(ราคา|ยอด|งบ|จำนวนเงิน|ค่าบริการ)\s*(\d[\d,]{3,})(?!\s*(บาท|\d|,))/g, '$1 $2 บาท');
+    t = t.replace(/\d{4,}(?![\d-])/g, function (m, off, str) { return /[\d,.\-/]/.test(str.charAt(off - 1)) || m.length > 9 ? m : Number(m).toLocaleString('en-US'); });
+    var parts = t.split(/[\u00a7\n]+/).map(function (x) { return x.replace(/\s+/g, ' ').replace(/^[\s,]+|[\s,]+$/g, ''); }).filter(function (x) { return x.length > 1; });
+    if (!parts.length) return '';
+    var body = parts.map(function (x) {
+      var q = /(หรือไม่|อย่างไร|เท่าไร|เมื่อไร|เพราะเหตุใด|อะไร|ที่ไหน|ใคร|\?)\s*$/.test(x);
+      x = x.replace(/\?+$/, '');
+      if (tone === 2 && mail) return x;
+      return x + (q ? tk.q : tk.k);
+    });
+    var who = w.name ? 'คุณ' + w.name.replace(/^คุณ/, '') : (tone === 0 ? '' : 'คุณลูกค้า');
+    var out = [];
+    if (mail) out.push('เรื่อง: ' + subj, '');
+    if (tone === 0) out.push(pk(['สวัสดี' + tk.k, 'สวัสดี' + tk.k + (who ? ' ' + who : '')]) + (who && n % 2 ? '' : ''));
+    else out.push('เรียน ' + who + (mail ? '' : tk.k));
+    if (mail) out.push('');
+    var plain0 = /^(ต้องขออภัย|ขออภัย|ขอขอบคุณ|ขอบคุณ|สวัสดี|ขอ|รบกวน|เรียน)/.test(body[0]);
+    if (plain0) { /* ประโยคแรกเป็นคำขอโทษ คำขอบคุณ หรือคำขออยู่แล้ว ไม่ต้องเติมคำนำ */ }
+    else if (tone === 2) body[0] = pk([tk.i + 'ขอเรียนให้ทราบว่า', tk.i + 'ขอเรียนแจ้งว่า', 'ตามที่ได้ประสานงานไว้ ']) + body[0];
+    else if (tone === 1) body[0] = pk([tk.i + 'ขออนุญาตแจ้งว่า', tk.i + 'ขอแจ้งให้ทราบว่า', 'ขออนุญาตเรียนว่า']) + body[0];
+    out.push(mail ? body.join(' ') : body.join('\n'));
+    if (tone === 2) { out.push('', pk(['หากมีข้อสงสัยประการใด สามารถติดต่อ' + tk.i + 'ได้ตลอดเวลาทำการ', 'หากต้องการข้อมูลเพิ่มเติม ' + tk.i + 'ยินดีชี้แจง', 'จึงเรียนมาเพื่อโปรดพิจารณา']) + (mail ? '' : tk.k)); out.push('', 'ขอแสดงความนับถือ', me, 'JST ERP'); }
+    else if (tone === 1) { out.push(pk(['หากมีข้อสงสัย แจ้ง' + tk.i + 'ได้เลย' + tk.k, 'หากต้องการข้อมูลเพิ่มเติม ' + tk.i + 'ยินดีให้ข้อมูล' + tk.k, 'ขอบคุณ' + tk.k])); if (mail) out.push('', 'ขอแสดงความนับถือ', me, 'JST ERP'); }
+    else out.push(pk(['ขอบคุณ' + tk.k, 'มีอะไรสอบถามเพิ่มเติมได้เลย' + tk.k]));
+    return out.join('\n').replace(/ +/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+  }
   function viewWrite() {
     if (!state.write) state.write = { draft: '', tone: 1, ch: 0, name: '', out: '', busy: false, note: '', ctl: null };
     var w = state.write, aiOff = auth.sample === null || !auth.samplePromise;
@@ -2499,14 +2596,17 @@ label.btn{cursor:pointer}
     var ta = h('textarea', { class: 'input', id: 'w-draft', rows: '6', maxlength: '2000', placeholder: 'เช่น พี่ครับ ใบเสนอราคาส่งให้แล้วนะ ราคา 550,000 ยังไม่รวมแวต ถ้าโอเคเดี๋ยวนัดวันเซ็นสัญญากัน', raw: w.draft });
     var tone = fSelect('w-tone', WRITE_TONES.map(function (x) { return x[0]; }), w.tone), ch = fSelect('w-ch', WRITE_CH.map(function (x) { return x[0]; }), w.ch);
     var name = fInput('w-name', 'text', w.name, { maxlength: '60', placeholder: 'ไม่บังคับ' });
+    var againW = h('button', { type: 'button', class: 'btn', text: 'สร้างประโยคใหม่' });
+    againW.addEventListener('click', function () { w.seed = (w.seed || 0) + 1; w.out = formalize(w, w.seed); paint(); });
+    function offline() { w.rule = true; w.seed = w.seed || 0; w.out = formalize(w, w.seed); w.note = w.out ? 'เรียบเรียงโดยไม่ใช้ AI: ปรับคำภาษาพูดเป็นคำทางการ จัดคำขึ้นต้นและคำลงท้ายให้ ตัวเลขและเงื่อนไขคงเดิม อ่านทวนก่อนส่งเพราะระบบปรับตามคำ ไม่ได้เข้าใจความหมายทั้งประโยค' : 'ไม่พบข้อความที่เรียบเรียงได้ ลองพิมพ์ให้ยาวขึ้น'; }
     var send = h('button', { type: 'submit', class: 'btn btn-primary', text: 'เรียบเรียงใหม่' }), stop = h('button', { type: 'button', class: 'btn', text: 'หยุด' });
     var outBody = h('div', { class: 'qa-text', role: 'status' }), noteEl = h('p', { class: 'hint' }), copyHost = h('div', { class: 'stack-s' });
     var copyBtn = h('button', { type: 'button', class: 'btn', text: 'คัดลอกข้อความ' });
     copyBtn.addEventListener('click', function () { copyText(w.out, copyBtn, copyHost); });
-    copyHost.appendChild(copyBtn);
+    copyHost.appendChild(h('div', { class: 'btn-row' }, copyBtn, againW));
     var outCard = h('section', { class: 'qa' }, h('h2', { class: 'qa-q', text: 'ข้อความที่เรียบเรียงแล้ว' }), h('div', { class: 'qa-a' }, outBody, noteEl, copyHost, h('p', { class: 'hint', text: 'อ่านทวนตัวเลขและเงื่อนไขทุกครั้งก่อนส่งให้ลูกค้า' })));
     function paint() {
-      send.disabled = w.busy || aiOff; stop.hidden = !w.busy;
+      send.disabled = w.busy; stop.hidden = !w.busy; againW.hidden = !(w.rule && w.out) || w.busy;
       outCard.hidden = !w.out && !w.busy && !w.note;
       outBody.textContent = w.out || (w.busy ? 'กำลังเรียบเรียง ถ้ามีหน้าต่างขออนุญาตใช้ Claude ให้กดอนุญาตก่อน' : '');
       noteEl.textContent = w.note; noteEl.hidden = !w.note;
@@ -2521,11 +2621,12 @@ label.btn{cursor:pointer}
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       w.draft = ta.value; w.name = name.value.trim(); w.tone = +tone.value; w.ch = +ch.value;
-      if (w.busy || aiOff) return;
+      if (w.busy) return;
       if (w.draft.trim().length < 3) { w.note = 'พิมพ์ข้อความที่ต้องการเรียบเรียงก่อน'; w.out = ''; paint(); ta.focus(); return; }
-      w.busy = true; w.out = ''; w.note = ''; paint();
+      if (aiOff) { offline(); paint(); return; }
+      w.rule = false; w.busy = true; w.out = ''; w.note = ''; paint();
       auth.samplePromise.then(function (sample) {
-        if (!sample) { w.busy = false; w.note = 'ตอนนี้ใช้ AI ไม่ได้ ให้เข้าสู่ระบบ Claude และอนุญาตให้หน้านี้ใช้ Claude'; if (state.write === w) paint(); return null; }
+        if (!sample) { w.busy = false; offline(); if (state.write === w) paint(); return null; }
         var ctl = new AbortController(); w.ctl = ctl;
         return sample(writePrompt(w), { cache: false, signal: ctl.signal, onText: function (u) { w.out = u.text; if (outBody.isConnected) outBody.textContent = u.text; } }).then(function (r) {
           w.out = String(r.text || '').replace(/\*\*/g, '').trim();
@@ -2533,14 +2634,15 @@ label.btn{cursor:pointer}
         }, function (e2) {
           var code = e2 && e2.code;
           w.out = e2 && typeof e2.text === 'string' && code !== 'refused' ? e2.text.trim() : '';
+          if (code !== 'cancelled' && !w.out) { offline(); return; }
           w.note = code === 'cancelled' ? (w.out ? 'หยุดไว้เท่านี้' : '') : (code === 'not_granted' || code === 'sampling_disabled') ? 'หน้านี้ยังไม่ได้รับอนุญาตให้ใช้ Claude' : askErrorNote(code);
         }).then(function () { w.busy = false; w.ctl = null; if (outBody.isConnected) paint(); });
       });
     });
     root.appendChild(tplSection());
-    root.appendChild(h('h2', { class: 'h2', text: 'เรียบเรียงข้อความของคุณเองด้วย AI' }));
-    if (!aiOff) root.appendChild(form);
-    if (aiOff) root.appendChild(h('p', { class: 'empty', text: 'ส่วนนี้ต้องใช้ AI ใช้แม่แบบด้านบนแทนได้ หรือเปิดหน้านี้ขณะเข้าสู่ระบบ Claude และอนุญาตให้หน้านี้ใช้ Claude' }));
+    root.appendChild(h('h2', { class: 'h2', text: 'เรียบเรียงข้อความของคุณเอง' }));
+    root.appendChild(form);
+    if (aiOff) root.appendChild(h('p', { class: 'muted', text: 'เครื่องนี้ใช้ AI ไม่ได้ ระบบจะเรียบเรียงจากคลังคำในโปรแกรมแทน ใช้ได้แม้ไม่มีอินเทอร์เน็ต กดสร้างประโยคใหม่เพื่อเปลี่ยนคำขึ้นต้นและคำลงท้ายได้' }));
     root.appendChild(outCard);
     paint();
     return root;
