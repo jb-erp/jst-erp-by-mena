@@ -2359,11 +2359,48 @@ label.btn{cursor:pointer}
     if (style === 1) return 'สวัสดี' + tk.k + ' ' + tk.i + 'ชื่อ' + me + ' จาก JST ERP ' + tk.k + '\n' + hook + (mirror ? ' ' + mirror + ' ' : '') + tk.k + ' ' + val + tk.k + '\n' + pk(['ขออนุญาตถามเพื่อให้แนะนำได้ตรง', 'ก่อนจะแนะนำอะไร ขอถามก่อน', 'เพื่อไม่ให้แนะนำเกินความจำเป็น ขอถาม']) + 'ว่า' + q + tk.q + '\n' + pk(['ถ้าฟังแล้วร้านยังไม่จำเป็นต้องใช้ระบบ ' + tk.i + 'จะบอกตรง ๆ ' + tk.k, 'สะดวกคุยทางแชตนี้ หรือให้' + tk.i + 'โทรไปช่วงไหนดี' + tk.q, 'ใช้เวลาคุยไม่เกิน 10 นาที' + tk.k]);
     return 'เรียน เจ้าของร้าน\n\n' + tk.i + 'ชื่อ' + me + ' จากทีมขาย JST ERP ขออนุญาตติดต่อเนื่องจาก' + hook.replace(/^เห็น(ที่เล่า|ว่า|โพสต์ที่)?|^อ่านเจอ/, 'พบข้อความเกี่ยวกับ').replace(/ที่โพสต์ไว้|ที่เล่าไว้.*$/, '') + ' ' + val + '\n\nเพื่อให้ข้อมูลที่ตรงกับธุรกิจของท่าน ' + tk.i + 'ขอเรียนถามว่า' + q + ' หากท่านสะดวก ' + tk.i + 'ยินดีนัดหมายอธิบายเพิ่มเติมประมาณ 15 นาที\n\nขอแสดงความนับถือ\n' + me + '\nJST ERP';
   }
+  /* ทางเข้า Google Sheet ที่เก็บข้อมูลจากฟอร์มหน้าเว็บ ลิงก์เก็บในเครื่องของผู้ใช้เท่านั้น */
+  var SEO_FORM_URL = 'https://jb-erp.github.io/jst-erp-by-mena/lead/';
+  function seoSheetBox() {
+    var box = h('section', { class: 'sheet stack', id: 'seo-sheet' });
+    function ok(u) { return /^https:\/\/docs\.google\.com\/spreadsheets\/[^\s]+$/.test(u); }
+    function paint(edit, err) {
+      var url = store.get(ukey('seosheet'), '');
+      box.textContent = '';
+      box.appendChild(h('div', { class: 'sheet-top' }, h('h2', { class: 'h2', text: 'ลูกค้าที่กรอกฟอร์มจากหน้าเว็บ (SEO)' })));
+      box.appendChild(h('p', { class: 'muted', text: 'ข้อมูลที่ลูกค้ากรอกในหน้าฟอร์มจะเข้า Google Sheet ของคุณ เปิดดูได้จากปุ่มด้านล่าง ต้องเข้าสู่ระบบ Google ด้วยบัญชีที่มีสิทธิ์ดูชีตนั้น' }));
+      if (url && !edit) {
+        var chg = h('button', { type: 'button', class: 'btn btn-sm', text: 'เปลี่ยนลิงก์' }), cp = h('button', { type: 'button', class: 'btn btn-sm', text: 'คัดลอกลิงก์ฟอร์ม' });
+        chg.addEventListener('click', function () { paint(true); });
+        cp.addEventListener('click', function () { copyText(SEO_FORM_URL, cp); });
+        box.appendChild(h('div', { class: 'btn-row' },
+          h('a', { class: 'btn btn-primary', href: url, target: '_blank', rel: 'noopener noreferrer', text: 'เปิด Google Sheet ลูกค้า SEO' }),
+          h('a', { class: 'btn', href: SEO_FORM_URL, target: '_blank', rel: 'noopener noreferrer', text: 'เปิดหน้าฟอร์ม' }), cp, chg));
+        return;
+      }
+      var inp = fInput('seo-sheet-url', 'url', url, { maxlength: '400', placeholder: 'https://docs.google.com/spreadsheets/d/...' });
+      var save = h('button', { type: 'submit', class: 'btn btn-primary', text: 'บันทึกลิงก์' });
+      var form = h('form', { class: 'stack' }, h('div', { class: 'filters' }, fField('วางลิงก์ Google Sheet (คัดลอกจากแถบที่อยู่ตอนเปิดชีต)', inp)), h('div', { class: 'btn-row' }, save, h('a', { class: 'btn', href: SEO_FORM_URL, target: '_blank', rel: 'noopener noreferrer', text: 'เปิดหน้าฟอร์ม' })));
+      if (err) form.appendChild(h('p', { class: 'form-error', text: err }));
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var v = inp.value.trim();
+        if (!ok(v)) { paint(true, 'ลิงก์ต้องขึ้นต้นด้วย https://docs.google.com/spreadsheets/'); return; }
+        store.set(ukey('seosheet'), v); paint(false);
+      });
+      box.appendChild(form);
+      box.appendChild(h('p', { class: 'muted', text: 'ลิงก์นี้เก็บไว้ในเครื่องนี้เท่านั้น ไม่ถูกส่งไปที่ใด ถ้าใช้เครื่องอื่นต้องวางลิงก์อีกครั้ง' }));
+    }
+    paint(false);
+    return box;
+  }
+
   function viewLeads() {
     if (!state.leads) state.leads = { kw: '', text: '', src: '', res: null, busy: false, note: '' };
     var L = state.leads, aiOff = auth.sample === null || !auth.samplePromise;
     var root = h('div', { class: 'stack-lg' });
     root.appendChild(h('div', { class: 'page-head' }, h('h1', { class: 'h1', text: 'หาลูกค้าใหม่' }), h('p', { class: 'lead', text: 'ค้นหาคนที่กำลังมองหาระบบหลังบ้านจากช่องทางออนไลน์ แล้วให้ AI ช่วยประเมินและแต่งข้อความทักครั้งแรก ก่อนบันทึกเป็นลูกค้า' })));
+    root.appendChild(seoSheetBox());
     function siteLinks(q) { return h('span', { class: 'btn-row' }, LEAD_SITES.map(function (x) { return h('a', { class: 'btn btn-sm', href: x[1] + encodeURIComponent(q), target: '_blank', rel: 'noopener noreferrer', raw: x[0], 'aria-label': 'ค้นใน ' + x[0] + ': ' + q }); })); }
     var own = fInput('lead-kw', 'text', L.kw, { maxlength: '80', placeholder: 'เช่น ระบบหลังบ้าน ร้านเครื่องสำอาง' }), ownHost = h('div');
     function paintOwn() { L.kw = own.value; ownHost.textContent = ''; if (own.value.trim()) ownHost.appendChild(siteLinks(own.value.trim())); }
