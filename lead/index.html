@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ปรึกษาระบบหลังร้านออนไลน์ฟรี | Mena, JST ERP</title>
+<meta name="description" content="สต็อกไม่ตรง ส่งของผิด ออเดอร์ล้นมือ บอกข้อมูลร้านสั้น ๆ แล้ว Mena จากทีมขาย JST ERP จะติดต่อกลับทาง LINE เพื่อแนะนำระบบจัดการออเดอร์และคลังสินค้าที่พอดีกับร้าน">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
+<style>
+/* หน้าเดียว: หัวเรื่องและปัญหา 3 ข้อด้านซ้าย ฟอร์มด้านขวา บนมือถือเรียงเป็นคอลัมน์เดียว */
+:root{--bg:#F3F7FF;--surface:#FFFFFF;--ink:#0F1C2E;--ink-2:#55657A;--line:#DCE6F7;--blue:#2563EB;--blue-2:#1D4ED8;--blue-bg:#E6EFFF;--ok:#17703F;--bad:#B42318;--line-green:#06C755;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0B1220;--surface:#131C2C;--ink:#E8EEF7;--ink-2:#A0B0C6;--line:#28364D;--blue:#6AA2FF;--blue-2:#8DB8FF;--blue-bg:#162B50;--ok:#63D6A2;--bad:#FF9389;color-scheme:dark}}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 1rem/1.7 "IBM Plex Sans Thai","Leelawadee UI","Thonburi",sans-serif}
+h1,h2,p,ul{margin:0}
+h1,h2{line-height:1.35;text-wrap:balance}
+.wrap{max-width:68rem;margin-inline:auto;padding:2rem 1rem 3rem;display:grid;gap:2rem;grid-template-columns:minmax(0,1fr)}
+@media (min-width:56rem){.wrap{grid-template-columns:minmax(0,1fr) minmax(0,26rem);align-items:start;padding-top:3.5rem}}
+.brand{font-weight:700;color:var(--blue-2)}
+h1{font-size:clamp(1.75rem,1.2rem + 2.4vw,2.6rem);color:var(--blue)}
+.lead{font-size:1.0625rem;color:var(--ink-2);margin-top:.75rem;max-width:36rem}
+.pains{list-style:none;padding:0;margin-top:1.5rem;display:grid;gap:.75rem}
+.pains li{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:.85rem 1rem}
+.pains b{display:block}
+.pains span{color:var(--ink-2);font-size:.9375rem}
+.card{font-style:normal;margin-top:1.5rem;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:1rem;display:grid;gap:.2rem}
+.card b{font-size:1.0625rem}
+.card a{color:var(--blue-2);font-weight:600;text-decoration:none;overflow-wrap:anywhere}
+.card a:hover{text-decoration:underline}
+.card span{color:var(--ink-2);font-size:.9375rem}
+.steps{margin-top:1.5rem;color:var(--ink-2);font-size:.9375rem}
+form,.done{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:1.25rem;display:grid;gap:.9rem;box-shadow:0 8px 24px rgba(37,99,235,.08)}
+h2{font-size:1.25rem}
+label,legend{font-weight:600;font-size:.875rem;color:var(--ink-2)}
+.field{display:grid;gap:.3rem}
+input[type=text],input[type=tel],input[type=number],select,textarea{width:100%;font:inherit;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:.55rem .7rem}
+textarea{resize:vertical}
+fieldset{border:0;padding:0;margin:0;display:grid;gap:.35rem}
+.checks{display:flex;flex-wrap:wrap;gap:.4rem .9rem}
+.checks label{font-weight:400;color:var(--ink);font-size:.9688rem;display:inline-flex;gap:.4rem;align-items:center}
+.consent{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.6rem;font-weight:400;color:var(--ink);font-size:.9063rem;line-height:1.6}
+input[type=checkbox]{width:1.1rem;height:1.1rem;accent-color:var(--blue)}
+.btn{font:600 1rem/1.4 inherit;font-family:inherit;border:0;border-radius:999px;padding:.75rem 1.4rem;cursor:pointer;text-decoration:none;text-align:center;display:inline-block}
+.btn-main{background:linear-gradient(90deg,#1E3FE6,#3B82F6);color:#fff}
+.btn-line{background:var(--line-green);color:#04260F}
+.btn-plain{background:var(--blue-bg);color:var(--blue-2)}
+.err{color:var(--bad);font-weight:600;font-size:.9375rem}
+.err:empty{display:none}
+pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:.8rem .9rem}
+.row{display:flex;flex-wrap:wrap;gap:.6rem}
+.note{font-size:.8438rem;color:var(--ink-2)}
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.qr{display:flex;flex-wrap:wrap;align-items:center;gap:.9rem}
+.qr img{border-radius:12px;background:#fff;padding:6px;border:1px solid var(--line);max-width:100%;height:auto}
+.qr p{flex:1 1 12rem;min-width:0}
+[hidden]{display:none!important}
+footer{max-width:68rem;margin-inline:auto;padding:0 1rem 2.5rem;color:var(--ink-2);font-size:.8438rem}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <section>
+    <h1>สต็อกไม่ตรง ส่งของผิด ออเดอร์ล้นมือ ปรึกษาฟรีก่อนตัดสินใจ</h1>
+    <p class="lead">บอกข้อมูลร้านสั้น ๆ 1 นาที เราจะติดต่อกลับทาง LINE เพื่อแนะนำระบบจัดการออเดอร์และคลังสินค้าที่พอดีกับขนาดร้าน ถ้าร้านยังไม่จำเป็นต้องใช้ระบบ เราจะบอกตรง ๆ</p>
+    <ul class="pains">
+      <li><b>ขายหลายแพลตฟอร์ม แต่สต็อกไม่ตรงกัน</b><span>ขายเกินสต็อกช่วงแคมเปญจนต้องยกเลิกออเดอร์</span></li>
+      <li><b>หยิบผิด แพ็กผิด ส่งไม่ครบ</b><span>หาของในคลังไม่เจอ พนักงานใหม่ใช้เวลานานกว่าจะคล่อง</span></li>
+      <li><b>ต้องเปิดหลังร้านทีละแพลตฟอร์ม</b><span>ทำงานซ้ำหลายหน้าจอ และไม่เห็นตัวเลขรวมของธุรกิจ</span></li>
+    </ul>
+    <address class="card"><b>Mena Yensodsai (Na)</b><span>Offline Sales Supervisor, JST ERP</span><a href="mailto:mena.y@jsterp.com">mena.y@jsterp.com</a><a href="https://www.jsterp.com" target="_blank" rel="noopener">www.jsterp.com</a><span>1477 ซอยลาดพร้าว 94 แขวงพลับพลา เขตวังทองหลาง กรุงเทพฯ 10310</span></address>
+    <p class="steps">ขั้นตอน: กรอกฟอร์ม → เปิด LINE แล้ววางข้อความ → ทีมงานตอบกลับในเวลาทำการ</p>
+  </section>
+
+  <section aria-label="แบบฟอร์มขอคำปรึกษา">
+    <form id="f" novalidate>
+      <h2>ขอคำปรึกษาฟรี</h2>
+      <div class="field"><label for="shop">ชื่อร้านหรือแบรนด์</label><input id="shop" type="text" maxlength="80" autocomplete="organization" required></div>
+      <fieldset><legend>ช่องทางที่ขาย</legend>
+        <div class="checks">
+          <label><input type="checkbox" name="ch" value="Shopee"> Shopee</label>
+          <label><input type="checkbox" name="ch" value="Lazada"> Lazada</label>
+          <label><input type="checkbox" name="ch" value="TikTok Shop"> TikTok Shop</label>
+          <label><input type="checkbox" name="ch" value="ไลฟ์สด"> ไลฟ์สด</label>
+          <label><input type="checkbox" name="ch" value="เว็บของร้าน"> เว็บของร้าน</label>
+          <label><input type="checkbox" name="ch" value="หน้าร้าน"> หน้าร้าน</label>
+        </div>
+      </fieldset>
+      <div class="field"><label for="orders">ออเดอร์เฉลี่ยต่อวัน</label>
+        <select id="orders"><option value="">เลือก</option><option>ไม่เกิน 50</option><option>51–200</option><option>201–500</option><option>501–1,500</option><option>มากกว่า 1,500</option></select></div>
+      <div class="field"><label for="wh">การเก็บและแพ็กสินค้า</label>
+        <select id="wh"><option value="">เลือก</option><option>แพ็กเองที่บ้านหรือที่ร้าน</option><option>มีคลังและพนักงานคลังของตัวเอง</option><option>รับฝากและแพ็กส่งให้ร้านอื่น (Fulfillment)</option></select></div>
+      <div class="field"><label for="pain">ปัญหาที่อยากแก้ที่สุด</label><textarea id="pain" rows="3" maxlength="400" placeholder="เช่น สต็อกไม่ตรงช่วงแคมเปญ"></textarea></div>
+      <div class="field"><label for="name">ชื่อผู้ติดต่อ</label><input id="name" type="text" maxlength="60" autocomplete="name" required></div>
+      <div class="field"><label for="tel">เบอร์โทร (ไม่บังคับ)</label><input id="tel" type="tel" maxlength="20" autocomplete="tel" inputmode="tel"></div>
+      <label class="consent" for="ok"><input id="ok" type="checkbox"><span>ยินยอมให้ Mena Yensodsai ทีมขาย JST ERP ใช้ข้อมูลนี้เพื่อติดต่อกลับเรื่องระบบหลังร้านเท่านั้น และขอให้ลบข้อมูลได้ทุกเมื่อโดยแจ้งทาง LINE</span></label>
+      <p class="err" id="err" role="alert"></p>
+      <button class="btn btn-main" type="submit">ถัดไป: ส่งทาง LINE</button>
+      <p class="note">หน้านี้ไม่เก็บข้อมูลของคุณ ข้อมูลจะถูกส่งเมื่อคุณกดส่งข้อความใน LINE เอง</p>
+    </form>
+    <div class="done" id="done" hidden>
+      <h2>ตรวจข้อความ แล้วส่งทาง LINE</h2>
+      <p class="note">ขั้นตอน: 1) กดปุ่มสีเขียว 2) เพิ่มเพื่อนใน LINE 3) วางข้อความในแชตแล้วกดส่ง</p>
+      <pre id="msg" tabindex="0"></pre>
+      <div class="row">
+        <a class="btn btn-line" id="line" href="#" target="_blank" rel="noopener">คัดลอกและเปิด LINE</a>
+        <button class="btn btn-plain" id="copy" type="button">คัดลอกข้อความ</button>
+        <button class="btn btn-plain" id="back" type="button">แก้ไขข้อมูล</button>
+      </div>
+      <p class="note" id="hint"></p>
+      <div class="qr"><img src="line-qr.png" width="180" height="180" alt="คิวอาร์โค้ดเพิ่มเพื่อน LINE ของ Mena ทีมขาย JST ERP"><p class="note">ใช้คอมพิวเตอร์อยู่ ให้เปิด LINE ในมือถือแล้วสแกนคิวอาร์โค้ดนี้เพื่อเพิ่มเพื่อน แล้วส่งข้อความด้านบน</p></div>
+    </div>
+  </section>
+</main>
+<footer>หน้านี้จัดทำโดย Mena Yensodsai ทีมขาย JST ERP เพื่อรับเรื่องขอคำปรึกษา เว็บไซต์ทางการของบริษัทคือ www.jsterp.com</footer>
+<script>
+(function () {
+  var LINE_URL = 'https://line.me/ti/p/v-TPXtXKuU';
+  function $(id) { return document.getElementById(id); }
+  var f = $('f'), done = $('done'), text = '';
+  f.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var ch = [].slice.call(document.querySelectorAll('input[name=ch]:checked')).map(function (x) { return x.value; });
+    var shop = $('shop').value.trim(), name = $('name').value.trim();
+    if (!shop) { $('err').textContent = 'ใส่ชื่อร้านหรือแบรนด์'; $('shop').focus(); return; }
+    if (!name) { $('err').textContent = 'ใส่ชื่อผู้ติดต่อ'; $('name').focus(); return; }
+    if (!$('ok').checked) { $('err').textContent = 'ติ๊กยินยอมให้ติดต่อกลับก่อนส่ง'; $('ok').focus(); return; }
+    $('err').textContent = '';
+    var L = ['ขอคำปรึกษาระบบหลังร้าน', 'ร้าน: ' + shop];
+    if (ch.length) L.push('ช่องทางขาย: ' + ch.join(', '));
+    if ($('orders').value) L.push('ออเดอร์ต่อวัน: ' + $('orders').value);
+    if ($('wh').value) L.push('การเก็บและแพ็ก: ' + $('wh').value);
+    if ($('pain').value.trim()) L.push('ปัญหาที่อยากแก้: ' + $('pain').value.trim());
+    L.push('ผู้ติดต่อ: ' + name + ($('tel').value.trim() ? ' โทร ' + $('tel').value.trim() : ''));
+    text = L.join('\n');
+    $('msg').textContent = text;
+    var a = $('line');
+    a.href = LINE_URL;
+    $('hint').textContent = 'กดปุ่มสีเขียว ระบบจะคัดลอกข้อความให้และเปิด LINE ของทีมขาย จากนั้นกดเพิ่มเพื่อน แล้ววางข้อความในแชตและกดส่ง';
+    f.hidden = true; done.hidden = false; $('msg').focus();
+  });
+  $('line').addEventListener('click', function () { try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(function () {}); } catch (e) {} });
+  $('back').addEventListener('click', function () { done.hidden = true; f.hidden = false; $('shop').focus(); });
+  $('copy').addEventListener('click', function () {
+    var b = $('copy');
+    function ok() { b.textContent = 'คัดลอกแล้ว'; setTimeout(function () { b.textContent = 'คัดลอกข้อความ'; }, 1600); }
+    function manual() { var r = document.createRange(); r.selectNodeContents($('msg')); var s = getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = 'เลือกข้อความแล้ว กดคัดลอกเอง'; }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(ok, manual); else manual();
+  });
+})();
+</script>
+</body>
+</html>
