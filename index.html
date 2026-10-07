@@ -846,6 +846,21 @@ label.btn{cursor:pointer}
 .fb-auth{max-width:28rem;margin-inline:auto;display:flex;flex-direction:column;gap:1.25rem}
 .fb-auth .form-grid{grid-template-columns:1fr}
 .fb-link{background:none;border:0;padding:0;color:var(--steel);font-weight:600;cursor:pointer;text-decoration:underline}
+
+.cal-stats{list-style:none;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr));gap:.75rem}
+.cal-stat{display:flex;flex-direction:column;gap:.15rem;padding:.8rem 1rem}
+.cal-stat b{font-size:1.5rem}
+.cal-act{flex:1 1 100%;gap:.4rem}
+.cal-panel{flex:1 1 100%;padding:.9rem 1rem;border:1px solid var(--line);border-radius:.75rem;background:var(--bg)}
+.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:.3rem}
+.cal-dow{text-align:center;font-size:.8rem;padding:.2rem 0}
+.cal-day{display:flex;flex-direction:column;align-items:flex-start;gap:.15rem;min-height:3.6rem;padding:.35rem .4rem;border:1px solid var(--line);border-radius:.6rem;background:transparent;color:inherit;font:inherit;cursor:pointer;text-align:left;min-width:0}
+.cal-day.is-out{opacity:.45}
+.cal-day.is-today{border-width:2px;border-color:var(--ok)}
+.cal-day.is-sel{outline:2px solid currentColor;outline-offset:1px}
+.cal-n{font-size:.72rem;font-weight:600;padding:.05rem .35rem;border-radius:1rem;background:var(--ok-bg);color:var(--ok);white-space:nowrap;max-width:100%;overflow:hidden}
+.cal-n.is-done{background:transparent;color:var(--ink-2);text-decoration:line-through}
+.cal-n.is-late{background:transparent;color:inherit;border:1px solid currentColor}
 </style>
 <div class="page" id="top">
   <header class="mbar">
@@ -1536,7 +1551,7 @@ label.btn{cursor:pointer}
     if (!o || typeof o !== 'object' || typeof o.id !== 'string' || !/^[a-z0-9]{4,40}$/.test(o.id)) return null;
     var appts = Array.isArray(o.appts) ? o.appts.slice(0, 60).map(function (a) {
       if (!a || typeof a !== 'object' || !crmDate(a.date)) return null;
-      return { id: /^[a-z0-9]{4,40}$/.test(String(a.id)) ? String(a.id) : crmId('a'), date: a.date, time: crmTime(a.time), kind: crmIdx(a.kind, CRM_KIND), note: crmStr(a.note, 300), done: !!a.done };
+      return { id: /^[a-z0-9]{4,40}$/.test(String(a.id)) ? String(a.id) : crmId('a'), date: a.date, time: crmTime(a.time), kind: crmIdx(a.kind, CRM_KIND), note: crmStr(a.note, 300), place: crmStr(a.place, 300), res: crmIdx(a.res, [0, 1, 2, 3]), doneAt: crmDate(a.doneAt), done: !!a.done };
     }).filter(Boolean) : [];
     return {
       id: o.id, name: crmStr(o.name, 120), contact: crmStr(o.contact, 80), phone: crmStr(o.phone, 40), line: crmStr(o.line, 60), email: crmStr(o.email, 120),
@@ -2124,21 +2139,21 @@ label.btn{cursor:pointer}
       if (!c.appts.length) { apHost.appendChild(h('li', { class: 'muted', text: 'ยังไม่มีนัดหมาย' })); return; }
       c.appts.slice().sort(function (a, b) { return a.date + a.time < b.date + b.time ? -1 : 1; }).forEach(function (a) {
         var cb = h('input', { type: 'checkbox', id: 'ap-' + a.id, checked: a.done });
-        cb.addEventListener('change', function () { a.done = cb.checked; paintAp(); });
+        cb.addEventListener('change', function () { a.done = cb.checked; a.doneAt = cb.checked ? iso(today()) : ''; if (!cb.checked) a.res = 0; paintAp(); });
         var del = h('button', { type: 'button', class: 'btn btn-sm', text: 'ลบ', 'aria-label': 'ลบนัด ' + apptLabel(a) });
         del.addEventListener('click', function () { c.appts = c.appts.filter(function (x) { return x !== a; }); paintAp(); });
         apHost.appendChild(h('li', { class: 'appt' + (a.done ? ' is-done' : '') }, cb,
           h('label', { for: 'ap-' + a.id }, h('b', { raw: apptLabel(a) }), ' · ' + CRM_KIND[a.kind], a.note ? h('span', { class: 'muted', text: ' · ' + a.note }) : null, a.done ? h('span', { class: 'muted', raw: ' (เสร็จแล้ว)' }) : null), del));
       });
     }
-    var aDate = fInput('a-date', 'date', iso(today())), aTime = fInput('a-time', 'time', ''), aKind = fSelect('a-kind', CRM_KIND, 0), aNote = fInput('a-note', 'text', '', { maxlength: '300', placeholder: 'เรื่องที่จะคุย' });
+    var aDate = fInput('a-date', 'date', iso(today())), aTime = fInput('a-time', 'time', ''), aKind = fSelect('a-kind', CRM_KIND, 0), aNote = fInput('a-note', 'text', '', { maxlength: '300', placeholder: 'เรื่องที่จะคุย' }), aPlace = fInput('a-place', 'text', '', { maxlength: '300', placeholder: 'ที่อยู่ หรือลิงก์ประชุม' });
     var aErr = h('p', { class: 'form-error', role: 'alert' });
     var aAdd = h('button', { type: 'button', class: 'btn', text: 'เพิ่มนัด' });
     aAdd.addEventListener('click', function () {
       if (!crmDate(aDate.value)) { aErr.textContent = 'เลือกวันที่ของนัดก่อน'; return; }
       aErr.textContent = '';
-      c.appts.push({ id: crmId('a'), date: aDate.value, time: crmTime(aTime.value), kind: crmIdx(aKind.value, CRM_KIND), note: aNote.value.trim().slice(0, 300), done: false });
-      aNote.value = ''; paintAp();
+      c.appts.push({ id: crmId('a'), date: aDate.value, time: crmTime(aTime.value), kind: crmIdx(aKind.value, CRM_KIND), note: aNote.value.trim().slice(0, 300), place: aPlace.value.trim().slice(0, 300), res: 0, doneAt: '', done: false });
+      aNote.value = ''; aPlace.value = ''; paintAp();
     });
     paintAp();
     var err = h('p', { class: 'form-error', role: 'alert' });
@@ -2180,7 +2195,7 @@ label.btn{cursor:pointer}
       h('div', { class: 'gate-body stack' }, h('div', { class: 'form-grid form-flat' }, fField('วันเริ่มสัญญา', F.cStart), fField('วันหมดสัญญา', F.cEnd), fField('แจ้งเตือนล่วงหน้า', F.cLead)), h('div', { class: 'btn-row' }, cCalc), cMsg,
         h('p', { class: 'hint', text: 'ตามแบบสัญญา อายุการใช้งานเริ่มนับจากวันที่ชำระค่าบริการ WMS ใช้ได้ 4 ปี ส่วน OMS คิดเป็นรายปี ให้ยึดวันที่ในสัญญาจริงของลูกค้าเป็นหลัก' }))));
     form.appendChild(h('section', { class: 'sheet' }, h('div', { class: 'sheet-top' }, h('h2', { class: 'h2', text: 'นัดหมาย' })),
-      h('div', { class: 'gate-body stack' }, apHost, h('div', { class: 'form-grid form-flat' }, fField('วันที่', aDate), fField('เวลา', aTime), fField('ประเภท', aKind), fField('รายละเอียด', aNote)), aErr, h('div', { class: 'btn-row' }, aAdd), h('p', { class: 'hint', text: 'นัดที่เพิ่มหรือแก้ไขจะถูกบันทึกเมื่อกดปุ่มบันทึกด้านล่าง' }))));
+      h('div', { class: 'gate-body stack' }, apHost, h('div', { class: 'form-grid form-flat' }, fField('วันที่', aDate), fField('เวลา', aTime), fField('ประเภท', aKind), fField('รายละเอียด', aNote), fField('สถานที่หรือลิงก์ประชุม', aPlace)), aErr, h('div', { class: 'btn-row' }, aAdd), h('p', { class: 'hint', text: 'นัดที่เพิ่มหรือแก้ไขจะถูกบันทึกเมื่อกดปุ่มบันทึกด้านล่าง' }))));
     var lgHost = h('ul', { class: 'logs' });
     var lDate = fInput('l-date', 'date', iso(today())), lKind = fSelect('l-kind', CRM_LOG, 0), lText = h('textarea', { class: 'input', id: 'l-text', rows: '4', maxlength: '2000', placeholder: 'เช่น คุยทางโทรศัพท์ 15 นาที ลูกค้าสนใจ WMS ระดับ 800,000 ขอใบเสนอราคาภายในวันศุกร์' });
     var lMsg = h('p', { class: 'hint', role: 'status' }), lAdd = h('button', { type: 'button', class: 'btn', text: 'เพิ่มบันทึก' });
@@ -2250,25 +2265,180 @@ label.btn{cursor:pointer}
     form.appendChild(h('div', { class: 'stack-s' }, err, row));
     return h('div', { class: 'stack-lg cust' }, h('div', { class: 'stack' }, h('p', { class: 'crumb' }, h('a', { href: '#crm', text: '← ลูกค้าทั้งหมด' })), h('h1', { class: 'h1', text: isNew ? 'เพิ่มลูกค้า' : (c.name || 'แก้ไขลูกค้า') })), form);
   }
+  var AP_RES = ['', 'สนใจ ไปต่อ', 'ขอคิดก่อน', 'ไม่สนใจ'];
+  var AP_RES_CLS = ['', 'chip-pass', 'chip-now', 'chip-bad'];
+  var DOW = ['จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.', 'อา.'];
+  var MONTHS_FULL = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+  function apIsUrl(s) { return /^https:\/\/[^\s]+$/.test(s || ''); }
+  function saveBlob(blob, filename) {
+    function viaLink() {
+      var u = URL.createObjectURL(blob), a = document.createElement('a');
+      a.href = u; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(u); }, 4000);
+    }
+    var c = window.claude;
+    if (!c || typeof c.use !== 'function') { viaLink(); return; }
+    c.use('downloads').then(function (d) { if (!d) return viaLink(); return d.save({ filename: filename, data: blob }); }, viaLink).catch(function () { /* ผู้ใช้ปฏิเสธการบันทึก */ });
+  }
+  /* ไฟล์ .ics ใช้เวลาท้องถิ่นของเครื่อง นัดที่ไม่ระบุเวลาเป็นนัดทั้งวัน */
+  function icsBuild(items) {
+    function esc(s) { return String(s || '').replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/([,;])/g, '\\$1'); }
+    function fold(l) { var out = []; while (l.length > 60) { out.push(l.slice(0, 60)); l = ' ' + l.slice(60); } out.push(l); return out.join('\r\n'); }
+    var now = new Date(), stamp = now.getUTCFullYear() + n2(now.getUTCMonth() + 1) + n2(now.getUTCDate()) + 'T' + n2(now.getUTCHours()) + n2(now.getUTCMinutes()) + n2(now.getUTCSeconds()) + 'Z';
+    var L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//JST ERP By Mena//TH', 'CALSCALE:GREGORIAN'];
+    items.forEach(function (x) {
+      var a = x.a, d = a.date.replace(/-/g, '');
+      L.push('BEGIN:VEVENT', 'UID:' + a.id + '@jst-erp-by-mena', 'DTSTAMP:' + stamp);
+      if (a.time) {
+        var p = a.time.split(':'), s = parseISO(a.date); s.setHours(+p[0], +p[1]); var e = new Date(s.getTime() + 3600000);
+        L.push('DTSTART:' + d + 'T' + p[0] + p[1] + '00', 'DTEND:' + iso(e).replace(/-/g, '') + 'T' + n2(e.getHours()) + n2(e.getMinutes()) + '00');
+      } else L.push('DTSTART;VALUE=DATE:' + d, 'DTEND;VALUE=DATE:' + iso(addDays(parseISO(a.date), 1)).replace(/-/g, ''));
+      L.push(fold('SUMMARY:' + esc(CRM_KIND[a.kind] + ' · ' + (x.c.name || 'ลูกค้า'))));
+      if (a.note) L.push(fold('DESCRIPTION:' + esc(a.note)));
+      if (a.place) L.push(fold('LOCATION:' + esc(a.place)));
+      L.push('BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Reminder', 'TRIGGER:-PT' + (a.time ? '30M' : '0M'), 'END:VALARM', 'END:VEVENT');
+    });
+    L.push('END:VCALENDAR');
+    return new Blob([L.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+  }
+  function apConfirmText(x) {
+    var tk = TOKENS[state.particle], a = x.a, d = parseISO(a.date);
+    var s = 'สวัสดี' + tk.k + ' ' + tk.i + ' ' + state.me.name + ' จาก JST ERP ' + tk.k + '\nขออนุญาตยืนยันนัดหมาย' + (a.kind === 6 ? '' : CRM_KIND[a.kind]) + ' วัน' + ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'][d.getDay()] + 'ที่ ' + d.getDate() + ' ' + MONTHS_FULL[d.getMonth()] + ' ' + (d.getFullYear() + 543) + (a.time ? ' เวลา ' + a.time + ' น.' : '') + ' ' + tk.k;
+    if (a.note) s += '\nหัวข้อ: ' + a.note;
+    if (a.place) s += '\n' + (apIsUrl(a.place) ? 'ลิงก์ประชุม: ' : 'สถานที่: ') + a.place;
+    return s + '\nหากไม่สะดวกตามวันและเวลาดังกล่าว แจ้ง' + tk.i + 'ได้เลย' + tk.k + ' ขอบคุณ' + tk.k;
+  }
+  function weekStart(d) { return addDays(d, -((d.getDay() + 6) % 7)); }
+
   function viewCal() {
     crmEnsure();
-    var t = iso(today()), wk = iso(addDays(today(), 7)), ap = crmAppts(true);
-    var groups = [['เลยกำหนด', [], 'is-late'], ['วันนี้', [], ''], ['7 วันข้างหน้า', [], ''], ['หลังจากนั้น', [], '']];
-    ap.forEach(function (x) { groups[x.a.date < t ? 0 : x.a.date === t ? 1 : x.a.date <= wk ? 2 : 3][1].push(x); });
+    if (!state.cal) state.cal = { view: 'list', ym: iso(today()).slice(0, 7), sel: '', open: '', panel: '', hist: false };
+    var S = state.cal, t = iso(today()), wk = iso(addDays(today(), 7)), ap = crmAppts(true), all = crmAppts(false);
     var root = h('div', { class: 'stack-lg' });
-    root.appendChild(h('div', { class: 'page-head' }, h('h1', { class: 'h1', text: 'ตารางนัดหมาย' }), h('p', { class: 'lead', text: 'นัดที่ยังไม่เสร็จของลูกค้าทุกราย เรียงตามวันและเวลา เพิ่มนัดได้จากหน้าของลูกค้าแต่ละราย' })));
+    root.appendChild(h('div', { class: 'page-head' }, h('h1', { class: 'h1', text: 'ตารางนัดหมาย' }), h('p', { class: 'lead', text: 'นัดของลูกค้าทุกราย เพิ่มนัด เลื่อนนัด บันทึกผลหลังนัด และส่งเข้าปฏิทินมือถือได้จากหน้านี้' })));
     append(root, contractAlerts());
-    if (!ap.length) { root.appendChild(h('p', { class: 'empty', text: crm.list.length ? 'ไม่มีนัดที่ค้างอยู่' : 'ยังไม่มีลูกค้า เพิ่มลูกค้าก่อนแล้วจึงเพิ่มนัด' })); root.appendChild(h('div', { class: 'btn-row' }, h('a', { class: 'btn btn-primary', href: crm.list.length ? '#crm' : '#cust-new', text: crm.list.length ? 'ไปที่รายชื่อลูกค้า' : 'เพิ่มลูกค้า' }))); return root; }
-    groups.forEach(function (g) {
-      if (!g[1].length) return;
-      root.appendChild(h('section', { class: 'stack' }, h('h2', { class: 'h2 ' + g[2], raw: g[0] + ' ' + g[1].length + ' นัด' }),
-        h('ul', { class: 'appts sheet' }, g[1].map(function (x) {
-          var done = h('button', { type: 'button', class: 'btn btn-sm', text: 'เสร็จแล้ว' });
-          done.addEventListener('click', function () { x.a.done = true; crmSave(x.c); render(); });
-          return h('li', { class: 'appt' }, h('span', { class: 'appt-when num ' + g[2], raw: apptLabel(x.a) }),
-            h('span', { class: 'appt-what' }, h('a', { href: '#cust-' + x.c.id, text: x.c.name || '(ยังไม่ใส่ชื่อ)' }), ' · ' + CRM_KIND[x.a.kind], x.a.note ? h('span', { class: 'muted', text: ' · ' + x.a.note }) : null), done);
-        }))));
+    if (!crm.list.length) { root.appendChild(h('p', { class: 'empty', text: 'ยังไม่มีลูกค้า เพิ่มลูกค้าก่อนแล้วจึงเพิ่มนัด' })); root.appendChild(h('div', { class: 'btn-row' }, h('a', { class: 'btn btn-primary', href: '#cust-new', text: 'เพิ่มลูกค้า' }))); return root; }
+
+    /* สรุปจำนวนนัด */
+    var w0 = iso(weekStart(today())), w1 = iso(addDays(weekStart(today()), 6)), p0 = iso(addDays(weekStart(today()), -7));
+    var doneAll = all.filter(function (x) { return x.a.done; }), dd = function (x) { return x.a.doneAt || x.a.date; };
+    var nThis = doneAll.filter(function (x) { return dd(x) >= w0 && dd(x) <= w1; }).length, nPrev = doneAll.filter(function (x) { return dd(x) >= p0 && dd(x) < w0; }).length;
+    var nWeekOpen = ap.filter(function (x) { return x.a.date >= w0 && x.a.date <= w1; }).length, nLate = ap.filter(function (x) { return x.a.date < t; }).length;
+    root.appendChild(h('ul', { class: 'cal-stats', 'aria-label': 'สรุปนัดหมาย' }, [['นัดที่ค้างในสัปดาห์นี้', nWeekOpen], ['เสร็จแล้วสัปดาห์นี้', nThis], ['เสร็จแล้วสัปดาห์ก่อน', nPrev], ['เลยกำหนด', nLate]].map(function (s) { return h('li', { class: 'sheet cal-stat' }, h('span', { class: 'muted', text: s[0] }), h('b', { class: 'num', raw: String(s[1]) })); })));
+
+    /* เพิ่มนัด */
+    var fc = h('select', { class: 'input', id: 'n-cust' });
+    crm.list.slice().sort(function (a, b) { return (a.name || '').localeCompare(b.name || '', 'th'); }).forEach(function (c) { fc.appendChild(h('option', { value: c.id, text: c.name || '(ยังไม่ใส่ชื่อ)' })); });
+    var fd = fInput('n-date', 'date', S.sel || t), ft = fInput('n-time', 'time', ''), fk = fSelect('n-kind', CRM_KIND, 0), fn = fInput('n-note', 'text', '', { maxlength: '300', placeholder: 'เรื่องที่จะคุย' }), fp = fInput('n-place', 'text', '', { maxlength: '300', placeholder: 'ที่อยู่ หรือลิงก์ Google Meet / Zoom' });
+    var fe = h('p', { class: 'form-error', role: 'alert' });
+    var addForm = h('form', { class: 'sheet stack', id: 'cal-add' }, h('h2', { class: 'h2', text: 'เพิ่มนัด' }),
+      h('div', { class: 'filters' }, fField('ลูกค้า', fc), fField('วันที่', fd), fField('เวลา (ไม่บังคับ)', ft), fField('ประเภท', fk), fField('เรื่อง', fn), fField('สถานที่หรือลิงก์ประชุม', fp)),
+      fe, h('div', { class: 'btn-row' }, h('button', { type: 'submit', class: 'btn btn-primary', text: 'เพิ่มนัด' })));
+    addForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var c = crm.list.filter(function (x) { return x.id === fc.value; })[0];
+      if (!c || !crmDate(fd.value)) { fe.textContent = 'เลือกลูกค้าและวันที่ก่อน'; return; }
+      if (c.appts.length >= 60) { fe.textContent = 'ลูกค้ารายนี้มีนัดครบ 60 รายการแล้ว ลบนัดเก่าในหน้าลูกค้าก่อน'; return; }
+      c.appts.push({ id: crmId('a'), date: fd.value, time: crmTime(ft.value), kind: crmIdx(fk.value, CRM_KIND), note: fn.value.trim().slice(0, 300), place: fp.value.trim().slice(0, 300), res: 0, doneAt: '', done: false });
+      crmSave(c); S.ym = fd.value.slice(0, 7); render();
     });
+    root.appendChild(addForm);
+
+    /* แถวนัดหนึ่งรายการ พร้อมแผงบันทึกผลและแผงเลื่อนนัด */
+    function row(x, late) {
+      var a = x.a, li = h('li', { class: 'appt' });
+      function btn(label, fn2, primary) { var b = h('button', { type: 'button', class: 'btn btn-sm' + (primary ? ' btn-primary' : ''), text: label }); b.addEventListener('click', function () { fn2(b); }); return b; }
+      function toggle(p) { if (S.open === a.id && S.panel === p) { S.open = ''; S.panel = ''; } else { S.open = a.id; S.panel = p; } render(); }
+      li.appendChild(h('span', { class: 'appt-when num ' + (late ? 'is-late' : ''), raw: apptLabel(a) }));
+      li.appendChild(h('span', { class: 'appt-what' }, h('a', { href: '#cust-' + x.c.id, text: x.c.name || '(ยังไม่ใส่ชื่อ)' }), ' · ' + CRM_KIND[a.kind], a.note ? h('span', { class: 'muted', text: ' · ' + a.note }) : null,
+        a.place ? (apIsUrl(a.place) ? h('span', null, ' · ', h('a', { href: a.place, target: '_blank', rel: 'noopener noreferrer', text: 'เปิดลิงก์ประชุม' })) : h('span', { class: 'muted', text: ' · ที่ ' + a.place })) : null));
+      li.appendChild(h('span', { class: 'btn-row cal-act' },
+        btn('เสร็จแล้ว', function () { toggle('done'); }, true), btn('เลื่อน', function () { toggle('move'); }),
+        btn('คัดลอกข้อความยืนยัน', function (b) { copyText(apConfirmText(x), b); }),
+        btn('ลงปฏิทิน', function () { saveBlob(icsBuild([x]), 'nat-' + a.date + '.ics'); })));
+      if (S.open !== a.id) return li;
+      var pn = h('div', { class: 'cal-panel stack' });
+      if (S.panel === 'move') {
+        var md = fInput('m-date', 'date', a.date), mt = fInput('m-time', 'time', a.time);
+        function moveTo(d, tm) { a.date = d; if (tm != null) a.time = crmTime(tm); S.open = ''; crmSave(x.c); render(); }
+        pn.appendChild(h('div', { class: 'btn-row' }, h('span', { class: 'muted', text: 'เลื่อนไป' }),
+          btn('พรุ่งนี้', function () { moveTo(iso(addDays(today(), 1))); }), btn('อีก 3 วัน', function () { moveTo(iso(addDays(today(), 3))); }), btn('สัปดาห์หน้า', function () { moveTo(iso(addDays(today(), 7))); })));
+        pn.appendChild(h('div', { class: 'filters' }, fField('หรือเลือกวัน', md), fField('เวลา', mt)));
+        pn.appendChild(h('div', { class: 'btn-row' }, btn('บันทึกวันใหม่', function () { if (crmDate(md.value)) moveTo(md.value, mt.value); }, true), btn('ยกเลิก', function () { S.open = ''; render(); })));
+      } else {
+        var rs = fSelect('d-res', AP_RES.slice(1), 0), rn = h('textarea', { class: 'input', id: 'd-note', rows: '3', maxlength: '1500', placeholder: 'สรุปสั้น ๆ ว่าคุยอะไร ลูกค้าตอบว่าอย่างไร (ไม่บังคับ)' });
+        var nx = h('input', { type: 'checkbox', id: 'd-next', checked: true }), nd = fInput('d-ndate', 'date', iso(addDays(today(), 3))), nt = fInput('d-ntime', 'time', ''), nk = fSelect('d-nkind', CRM_KIND, 0), nn = fInput('d-nnote', 'text', '', { maxlength: '300', placeholder: 'เรื่องที่จะติดตาม' });
+        var nextBox = h('div', { class: 'filters' }, fField('วันที่นัดถัดไป', nd), fField('เวลา', nt), fField('ประเภท', nk), fField('เรื่อง', nn));
+        nx.addEventListener('change', function () { nextBox.hidden = !nx.checked; });
+        pn.appendChild(h('div', { class: 'filters' }, fField('ผลของนัดนี้', rs), fField('บันทึกผล', rn, true)));
+        pn.appendChild(h('div', { class: 'appt' }, nx, h('label', { for: 'd-next', text: 'ตั้งนัดติดตามครั้งถัดไป' })));
+        pn.appendChild(nextBox);
+        pn.appendChild(h('div', { class: 'btn-row' }, btn('บันทึกผลและปิดนัด', function () {
+          var c = x.c, r = crmIdx(rs.value, AP_RES.slice(1)) + 1, note = rn.value.trim();
+          a.done = true; a.res = r; a.doneAt = t;
+          c.logs.push({ id: crmId('l'), date: t, kind: 0, text: ('ผลนัด' + CRM_KIND[a.kind] + ' ' + apptLabel(a) + ': ' + AP_RES[r] + (note ? '\n' + note : '')).slice(0, 2000) });
+          if (nx.checked && crmDate(nd.value) && c.appts.length < 60) c.appts.push({ id: crmId('a'), date: nd.value, time: crmTime(nt.value), kind: crmIdx(nk.value, CRM_KIND), note: nn.value.trim().slice(0, 300), place: '', res: 0, doneAt: '', done: false });
+          S.open = ''; crmSave(c); render();
+        }, true), btn('ยกเลิก', function () { S.open = ''; render(); })));
+      }
+      li.appendChild(pn);
+      return li;
+    }
+
+    /* สลับมุมมอง */
+    function tab(v, label) { var b = h('button', { type: 'button', class: 'btn btn-sm' + (S.view === v ? ' btn-primary' : ''), 'aria-pressed': S.view === v ? 'true' : 'false', text: label }); b.addEventListener('click', function () { S.view = v; S.open = ''; render(); }); return b; }
+    var exp = h('button', { type: 'button', class: 'btn btn-sm', text: 'ส่งออกนัดที่ค้างทั้งหมด (.ics)' });
+    exp.disabled = !ap.length;
+    exp.addEventListener('click', function () { saveBlob(icsBuild(ap), 'jst-appointments.ics'); });
+    root.appendChild(h('div', { class: 'btn-row' }, tab('list', 'รายการ'), tab('month', 'ปฏิทินรายเดือน'), exp));
+
+    if (S.view === 'month') {
+      var y = +S.ym.slice(0, 4), m = +S.ym.slice(5, 7) - 1, first = new Date(y, m, 1), start = weekStart(first), by = {};
+      all.forEach(function (x) { (by[x.a.date] = by[x.a.date] || []).push(x); });
+      function nav(d, label, aria) { var b = h('button', { type: 'button', class: 'btn btn-sm', text: label, 'aria-label': aria }); b.addEventListener('click', function () { var n = new Date(y, m + d, 1); S.ym = iso(n).slice(0, 7); S.sel = ''; render(); }); return b; }
+      var grid = h('div', { class: 'cal-grid' });
+      DOW.forEach(function (d) { grid.appendChild(h('div', { class: 'cal-dow muted', raw: d })); });
+      for (var i = 0; i < 42; i++) {
+        var d = addDays(start, i), ds = iso(d), items = by[ds] || [], open = items.filter(function (x) { return !x.a.done; }).length;
+        if (i >= 35 && d.getMonth() !== m && i % 7 === 0) break;
+        var cell = h('button', { type: 'button', class: 'cal-day' + (d.getMonth() !== m ? ' is-out' : '') + (ds === t ? ' is-today' : '') + (ds === S.sel ? ' is-sel' : ''), 'data-d': ds, 'aria-label': fmtDate(d, true) + (items.length ? ' มี ' + items.length + ' นัด' : ' ไม่มีนัด') },
+          h('span', { class: 'num', raw: String(d.getDate()) }), items.length ? h('span', { class: 'cal-n' + (open ? '' : ' is-done') + (open && ds < t ? ' is-late' : ''), raw: (open || items.length) + ' นัด' }) : null);
+        cell.addEventListener('click', function () { S.sel = this.getAttribute('data-d'); S.open = ''; render(); });
+        grid.appendChild(cell);
+      }
+      root.appendChild(h('section', { class: 'stack' }, h('div', { class: 'btn-row' }, nav(-1, 'เดือนก่อน', 'เดือนก่อน'), h('h2', { class: 'h2', raw: MONTHS_FULL[m] + ' ' + (y + 543) }), nav(1, 'เดือนถัดไป', 'เดือนถัดไป')), grid));
+      if (S.sel) {
+        var day = (by[S.sel] || []).slice().sort(function (a, b) { return a.a.time < b.a.time ? -1 : 1; });
+        root.appendChild(h('section', { class: 'stack' }, h('h2', { class: 'h2', raw: 'นัดวันที่ ' + fmtDate(parseISO(S.sel), true) + ' ' + day.length + ' นัด' }),
+          day.length ? h('ul', { class: 'appts sheet' }, day.map(function (x) { return x.a.done ? histRow(x) : row(x, x.a.date < t); })) : h('p', { class: 'empty', text: 'วันนี้ยังไม่มีนัด ใช้แบบฟอร์มเพิ่มนัดด้านบนได้เลย วันที่ถูกเลือกไว้ให้แล้ว' })));
+      } else root.appendChild(h('p', { class: 'muted', text: 'กดที่วันเพื่อดูนัดของวันนั้น' }));
+    } else {
+      var groups = [['เลยกำหนด', [], 'is-late'], ['วันนี้', [], ''], ['7 วันข้างหน้า', [], ''], ['หลังจากนั้น', [], '']];
+      ap.forEach(function (x) { groups[x.a.date < t ? 0 : x.a.date === t ? 1 : x.a.date <= wk ? 2 : 3][1].push(x); });
+      if (!ap.length) root.appendChild(h('p', { class: 'empty', text: 'ไม่มีนัดที่ค้างอยู่' }));
+      groups.forEach(function (g) {
+        if (!g[1].length) return;
+        root.appendChild(h('section', { class: 'stack' }, h('h2', { class: 'h2 ' + g[2], raw: g[0] + ' ' + g[1].length + ' นัด' }), h('ul', { class: 'appts sheet' }, g[1].map(function (x) { return row(x, g[2] === 'is-late'); }))));
+      });
+    }
+
+    /* ประวัตินัดที่เสร็จแล้ว */
+    function histRow(x) {
+      var a = x.a, undo = h('button', { type: 'button', class: 'btn btn-sm', text: 'เปิดนัดอีกครั้ง' });
+      undo.addEventListener('click', function () { a.done = false; a.res = 0; a.doneAt = ''; crmSave(x.c); render(); });
+      return h('li', { class: 'appt' }, h('span', { class: 'appt-when num', raw: apptLabel(a) }),
+        h('span', { class: 'appt-what' }, h('a', { href: '#cust-' + x.c.id, text: x.c.name || '(ยังไม่ใส่ชื่อ)' }), ' · ' + CRM_KIND[a.kind], a.note ? h('span', { class: 'muted', text: ' · ' + a.note }) : null),
+        h('span', { class: 'chip ' + AP_RES_CLS[a.res || 0], raw: a.res ? AP_RES[a.res] : 'เสร็จแล้ว' }), undo);
+    }
+    var hb = h('button', { type: 'button', class: 'btn btn-sm', 'aria-expanded': S.hist ? 'true' : 'false', text: (S.hist ? 'ซ่อน' : 'ดู') + 'ประวัตินัดที่เสร็จแล้ว (' + doneAll.length + ')' });
+    hb.addEventListener('click', function () { S.hist = !S.hist; render(); });
+    var hs = h('section', { class: 'stack', id: 'cal-hist' }, h('div', { class: 'btn-row' }, hb));
+    if (S.hist) {
+      var srt = doneAll.slice().sort(function (a, b) { return dd(a) + a.a.time > dd(b) + b.a.time ? -1 : 1; });
+      hs.appendChild(srt.length ? h('ul', { class: 'appts sheet' }, srt.slice(0, 60).map(histRow)) : h('p', { class: 'empty', text: 'ยังไม่มีนัดที่เสร็จแล้ว' }));
+      if (srt.length > 60) hs.appendChild(h('p', { class: 'muted', text: 'แสดง 60 นัดล่าสุด นัดที่เก่ากว่านี้ดูได้ในหน้าของลูกค้าแต่ละราย' }));
+    }
+    root.appendChild(hs);
     return root;
   }
 
@@ -2399,13 +2569,13 @@ label.btn{cursor:pointer}
     if (!state.leads) state.leads = { kw: '', text: '', src: '', res: null, busy: false, note: '' };
     var L = state.leads, aiOff = auth.sample === null || !auth.samplePromise;
     var root = h('div', { class: 'stack-lg' });
-    root.appendChild(h('div', { class: 'page-head' }, h('h1', { class: 'h1', text: 'หาลูกค้าใหม่' }), h('p', { class: 'lead', text: 'ค้นหาคนที่กำลังมองหาระบบหลังบ้านจากช่องทางออนไลน์ แล้วให้ AI ช่วยประเมินและแต่งข้อความทักครั้งแรก ก่อนบันทึกเป็นลูกค้า' })));
+    root.appendChild(h('div', { class: 'page-head' }, h('h1', { class: 'h1', text: 'หาลูกค้าใหม่' }), h('p', { class: 'lead', text: 'ค้นหาคนที่กำลังมองหาระบบหลังบ้านจากช่องทางออนไลน์ และเปิดดูลูกค้าที่กรอกฟอร์มจากหน้าเว็บ' })));
     root.appendChild(seoSheetBox());
     function siteLinks(q) { return h('span', { class: 'btn-row' }, LEAD_SITES.map(function (x) { return h('a', { class: 'btn btn-sm', href: x[1] + encodeURIComponent(q), target: '_blank', rel: 'noopener noreferrer', raw: x[0], 'aria-label': 'ค้นใน ' + x[0] + ': ' + q }); })); }
     var own = fInput('lead-kw', 'text', L.kw, { maxlength: '80', placeholder: 'เช่น ระบบหลังบ้าน ร้านเครื่องสำอาง' }), ownHost = h('div');
     function paintOwn() { L.kw = own.value; ownHost.textContent = ''; if (own.value.trim()) ownHost.appendChild(siteLinks(own.value.trim())); }
     own.addEventListener('input', paintOwn); paintOwn();
-    root.appendChild(h('section', { class: 'stack' }, h('h2', { class: 'h2', text: '1. ค้นจากคำที่บอกว่ากำลังหาระบบ' }),
+    root.appendChild(h('section', { class: 'stack' }, h('h2', { class: 'h2', text: 'ค้นจากคำที่บอกว่ากำลังหาระบบ' }),
       h('p', { class: 'muted', text: 'กดปุ่มเพื่อเปิดผลค้นหาในแท็บใหม่ มองหาโพสต์ คำถาม หรือประกาศที่ตรงกับสัญญาณในวงเล็บ' }),
       h('ul', { class: 'appts sheet' }, LEAD_KEYS.map(function (k) { return h('li', { class: 'appt' }, h('span', { class: 'appt-what' }, h('b', { text: k[0] }), h('span', { class: 'muted', text: ' (' + k[1] + ')' })), siteLinks(k[0])); })),
       h('div', { class: 'filters' }, fField('คำค้นของคุณเอง', own)), ownHost));
@@ -2465,9 +2635,8 @@ label.btn{cursor:pointer}
         }, function (e2) { L.res = leadRule(L); L.note = ''; }).then(function () { L.busy = false; if (state.leads === L && out.isConnected) paint(); });
       });
     });
-    root.appendChild(h('section', { class: 'stack' }, h('h2', { class: 'h2', text: aiOff ? '2. วางข้อความที่เจอ เพื่อประเมินเบื้องต้น' : '2. วางข้อความที่เจอ ให้ AI ช่วยประเมิน' }), aiOff ? h('p', { class: 'muted', text: 'เครื่องนี้ใช้ AI ไม่ได้ ระบบจะประเมินจากสิ่งที่ข้อความเล่า เช่น สต็อกไม่ตรง หยิบผิด หลายแพลตฟอร์ม แล้วแต่งข้อความทัก 3 แบบจากรายละเอียดในโพสต์และเนื้อหาในหลักสูตร กดสร้างประโยคใหม่ได้จนกว่าจะถูกใจ ใช้ได้แม้ไม่มีอินเทอร์เน็ต' }) : null, form, out));
     root.appendChild(h('aside', { class: 'note note-warn' }, h('span', { class: 'tag', text: 'ก่อนทักลูกค้า' }),
-      h('p', { text: 'หน้านี้ไม่ได้ดึงข้อมูลจากเว็บเอง คุณเป็นคนค้นและเลือกข้อความมาวาง ให้บันทึกเฉพาะข้อมูลของร้านหรือธุรกิจที่เจ้าของเปิดเผยเอง ไม่เก็บเบอร์หรือข้อมูลส่วนตัวที่เขาไม่ได้ให้ไว้เพื่อการติดต่อ ทำตามกติกาของกลุ่มและแพลตฟอร์มนั้น และหยุดติดต่อเมื่อเขาไม่สนใจ' })));
+      h('p', { text: 'หน้านี้ไม่ได้ดึงข้อมูลจากเว็บเอง คุณเป็นคนค้นและเลือกเอง ให้บันทึกเฉพาะข้อมูลของร้านหรือธุรกิจที่เจ้าของเปิดเผยเอง ไม่เก็บเบอร์หรือข้อมูลส่วนตัวที่เขาไม่ได้ให้ไว้เพื่อการติดต่อ ทำตามกติกาของกลุ่มและแพลตฟอร์มนั้น และหยุดติดต่อเมื่อเขาไม่สนใจ' })));
     paint();
     return root;
   }
