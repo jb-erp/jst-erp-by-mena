@@ -1528,6 +1528,7 @@ label.btn{cursor:pointer}
 
   /* ---------- ลูกค้า นัดหมาย แดชบอร์ด และแต่งประโยคทางการ ---------- */
   var CRM_STAGES = ['ติดต่อครั้งแรก', 'สำรวจความต้องการ', 'นำเสนอและเดโม', 'ส่งใบเสนอราคา', 'ต่อรอง', 'ปิดการขายได้', 'ไม่ซื้อ'];
+  var CRM_PROB = [10, 20, 40, 60, 80];
   var CRM_INTEREST = ['ยังไม่ทราบ', 'สนใจน้อย', 'สนใจปานกลาง', 'สนใจมาก'];
   var CRM_INT_CLS = ['', '', 'chip-now', 'chip-pass'];
   var CRM_PAY = ['ยังไม่มียอด', 'รอชำระ', 'ชำระบางส่วน', 'ชำระครบแล้ว'];
@@ -1556,7 +1557,7 @@ label.btn{cursor:pointer}
     return {
       id: o.id, name: crmStr(o.name, 120), contact: crmStr(o.contact, 80), phone: crmStr(o.phone, 40), line: crmStr(o.line, 60), email: crmStr(o.email, 120),
       biz: crmStr(o.biz, 120), channels: crmStr(o.channels, 160), orders: crmAmt(o.orders), pkg: crmIdx(o.pkg, CRM_PKG), stage: crmIdx(o.stage, CRM_STAGES),
-      interest: crmIdx(o.interest, CRM_INTEREST), pay: crmIdx(o.pay, CRM_PAY), quote: crmAmt(o.quote), paid: crmAmt(o.paid), due: crmDate(o.due), cStart: crmDate(o.cStart), cEnd: crmDate(o.cEnd), cLead: o.cLead == null ? 2 : crmIdx(o.cLead, CRM_LEAD), src: crmIdx(o.src, CRM_SRC), lost: crmIdx(o.lost, CRM_LOST), ho: CRM_HO.map(function (x, i) { return !!(Array.isArray(o.ho) && o.ho[i]); }), hist: (Array.isArray(o.hist) ? o.hist : []).slice(-30).map(function (x) { return x && typeof x === 'object' && crmDate(x.d) ? { s: crmIdx(x.s, CRM_STAGES), d: x.d } : null; }).filter(Boolean), notes: crmStr(o.notes, 3000),
+      interest: crmIdx(o.interest, CRM_INTEREST), pay: crmIdx(o.pay, CRM_PAY), quote: crmAmt(o.quote), paid: crmAmt(o.paid), due: crmDate(o.due), cStart: crmDate(o.cStart), cEnd: crmDate(o.cEnd), close: crmDate(o.close), cLead: o.cLead == null ? 2 : crmIdx(o.cLead, CRM_LEAD), src: crmIdx(o.src, CRM_SRC), lost: crmIdx(o.lost, CRM_LOST), ho: CRM_HO.map(function (x, i) { return !!(Array.isArray(o.ho) && o.ho[i]); }), hist: (Array.isArray(o.hist) ? o.hist : []).slice(-30).map(function (x) { return x && typeof x === 'object' && crmDate(x.d) ? { s: crmIdx(x.s, CRM_STAGES), d: x.d } : null; }).filter(Boolean), notes: crmStr(o.notes, 3000),
       appts: appts, logs: (Array.isArray(o.logs) ? o.logs : []).slice(-200).map(function (l) {
         if (!l || typeof l !== 'object' || !crmDate(l.date) || !crmStr(l.text, 2000).trim()) return null;
         return { id: /^[a-z0-9]{4,40}$/.test(String(l.id)) ? String(l.id) : crmId('l'), date: l.date, kind: crmIdx(l.kind, CRM_LOG), text: crmStr(l.text, 2000) };
@@ -1600,11 +1601,12 @@ label.btn{cursor:pointer}
   function crmDropTomb(id) { store.set(ukey('crmdel'), crmTombs().filter(function (x) { return x !== id; })); }
   function crmStats() {
     var t = iso(today()), wk = iso(addDays(today(), 7));
-    var o = { n: crm.list.length, st: CRM_STAGES.map(function () { return 0; }), it: CRM_INTEREST.map(function () { return 0; }), py: CRM_PAY.map(function () { return 0; }), open: 0, won: 0, paid: 0, owe: 0, week: 0, late: 0, exp: 0, wonM: 0, tgt: crmTarget(), dSum: 0, dN: 0, lr: CRM_LOST.map(function () { return 0; }), sr: CRM_SRC.map(function () { return 0; }) };
+    var o = { n: crm.list.length, st: CRM_STAGES.map(function () { return 0; }), it: CRM_INTEREST.map(function () { return 0; }), py: CRM_PAY.map(function () { return 0; }), open: 0, won: 0, paid: 0, owe: 0, week: 0, late: 0, exp: 0, wonM: 0, tgt: crmTarget(), dSum: 0, dN: 0, lr: CRM_LOST.map(function () { return 0; }), sr: CRM_SRC.map(function () { return 0; }), fc: 0, fcRaw: 0, fcN: 0, noClose: 0 };
     var ym = iso(today()).slice(0, 7);
     crm.list.forEach(function (c) {
       o.st[c.stage]++; o.it[c.interest]++; o.py[c.pay]++;
       if (c.stage < 5) o.open += c.quote;
+      if (c.stage < 5 && c.quote) { if (!c.close) o.noClose++; else if (c.close.slice(0, 7) === ym) { o.fc += Math.round(c.quote * CRM_PROB[c.stage] / 100); o.fcRaw += c.quote; o.fcN++; } }
       if (c.stage === 5) { o.won += c.quote; o.owe += Math.max(0, c.quote - c.paid); }
       o.paid += c.paid;
       var ck = contractOf(c); if (ck && ck.st !== 'ok') o.exp++;
@@ -1629,7 +1631,7 @@ label.btn{cursor:pointer}
   function cleanSum(d) {
     d = asObject(d);
     function arr(v, n) { var out = [], i; for (i = 0; i < n; i++) out.push(crmAmt(Array.isArray(v) ? v[i] : 0)); return out; }
-    return { n: crmAmt(d.n), st: arr(d.st, CRM_STAGES.length), it: arr(d.it, CRM_INTEREST.length), py: arr(d.py, CRM_PAY.length), open: crmAmt(d.open), won: crmAmt(d.won), paid: crmAmt(d.paid), owe: crmAmt(d.owe), week: crmAmt(d.week), late: crmAmt(d.late), exp: crmAmt(d.exp), wonM: crmAmt(d.wonM), tgt: crmAmt(d.tgt), dSum: crmAmt(d.dSum), dN: crmAmt(d.dN), lr: arr(d.lr, CRM_LOST.length), sr: arr(d.sr, CRM_SRC.length), updatedAt: crmStr(d.updatedAt, 30) };
+    return { n: crmAmt(d.n), st: arr(d.st, CRM_STAGES.length), it: arr(d.it, CRM_INTEREST.length), py: arr(d.py, CRM_PAY.length), open: crmAmt(d.open), won: crmAmt(d.won), paid: crmAmt(d.paid), owe: crmAmt(d.owe), week: crmAmt(d.week), late: crmAmt(d.late), exp: crmAmt(d.exp), wonM: crmAmt(d.wonM), tgt: crmAmt(d.tgt), dSum: crmAmt(d.dSum), dN: crmAmt(d.dN), fc: crmAmt(d.fc), fcRaw: crmAmt(d.fcRaw), fcN: crmAmt(d.fcN), noClose: crmAmt(d.noClose), lr: arr(d.lr, CRM_LOST.length), sr: arr(d.sr, CRM_SRC.length), updatedAt: crmStr(d.updatedAt, 30) };
   }
   var teamSales = { unsub: null, dead: false, loaded: false, docs: [], token: 0 };
   function subscribeTeamSales() {
@@ -1655,7 +1657,7 @@ label.btn{cursor:pointer}
       if (!b) return;
       var T = cleanSum({});
       docs.forEach(function (d) {
-        ['n', 'open', 'won', 'paid', 'owe', 'week', 'late', 'exp', 'wonM', 'tgt', 'dSum', 'dN'].forEach(function (k) { T[k] += d.s[k]; });
+        ['n', 'open', 'won', 'paid', 'owe', 'week', 'late', 'exp', 'wonM', 'tgt', 'dSum', 'dN', 'fc', 'fcRaw', 'fcN', 'noClose'].forEach(function (k) { T[k] += d.s[k]; });
         ['st', 'it', 'py', 'lr', 'sr'].forEach(function (k) { d.s[k].forEach(function (v, i) { T[k][i] += v; }); });
       });
       docs.sort(function (x, y) { return y.s.won - x.s.won || y.s.open - x.s.open; });
@@ -1841,11 +1843,31 @@ label.btn{cursor:pointer}
   function winRate(x) { var cl = x.st[5] + x.st[6]; return cl ? Math.round(x.st[5] * 100 / cl) + '%' : '–'; }
   function goalTiles(x, who) {
     function tile(lab, big, sub, extra) { return h('div', { class: 'tile' }, h('span', { class: 'label', text: lab }), h('span', { class: 'cell-big num', raw: big }), extra || null, h('span', { class: 'cell-sub', text: sub })); }
-    var pct = x.tgt ? Math.min(100, Math.round(x.wonM * 100 / x.tgt)) : 0;
+    var pct = x.tgt ? Math.min(100, Math.round(x.wonM * 100 / x.tgt)) : 0, fcAll = x.wonM + x.fc, fcPct = x.tgt ? Math.min(100, Math.round(fcAll * 100 / x.tgt)) : 0;
+    var fcSub = 'ปิดแล้ว ' + money(x.wonM) + ' + ดีลที่คาดว่าจะปิดเดือนนี้ ' + x.fcN + ' ราย ถ่วงตามขั้นตอนเป็น ' + money(x.fc) + ' บาท' +
+      (x.tgt ? (fcAll >= x.tgt ? ' · คาดว่าถึงเป้า' : ' · ยังขาดเป้าอีก ' + money(x.tgt - fcAll) + ' บาท') : '') +
+      (x.noClose ? ' · ยังไม่ใส่วันที่คาดว่าจะปิด ' + x.noClose + ' ดีล' : '');
     return h('div', { class: 'tiles' },
       tile('ยอดปิดเดือนนี้ ' + who, money(x.wonM) + ' บาท', x.tgt ? 'เป้า ' + money(x.tgt) + ' บาท · ทำได้ ' + Math.round(x.wonM * 100 / x.tgt) + '%' : 'ยังไม่ได้ตั้งเป้า', x.tgt ? h('span', { class: 'bars-track', role: 'img', 'aria-label': 'ทำได้ ' + pct + '% ของเป้า' }, h('i', { style: 'width:' + pct + '%' })) : null),
+      tile('คาดว่าจะปิดได้เดือนนี้', money(fcAll) + ' บาท' + (x.tgt ? ' (' + Math.round(fcAll * 100 / x.tgt) + '%)' : ''), fcSub, x.tgt ? h('span', { class: 'bars-track', role: 'img', 'aria-label': 'คาดว่าได้ ' + fcPct + '% ของเป้า' }, h('i', { style: 'width:' + fcPct + '%' })) : null),
       tile('อัตราปิดการขาย', winRate(x), 'ปิดได้ ' + x.st[5] + ' ราย · ไม่ซื้อ ' + x.st[6] + ' ราย'),
       tile('เวลาปิดดีลเฉลี่ย', x.dN ? Math.round(x.dSum / x.dN) + ' วัน' : '–', 'นับจากวันที่เพิ่มลูกค้าถึงวันที่ปิดการขาย'));
+  }
+  function crmForecastList() {
+    var ym = iso(today()).slice(0, 7), rows = crm.list.filter(function (c) { return c.stage < 5 && c.quote && c.close && c.close.slice(0, 7) === ym; });
+    if (!rows.length) return h('p', { class: 'hint', text: 'ยังไม่มีดีลที่คาดว่าจะปิดเดือนนี้ ใส่ “วันที่คาดว่าจะปิด” และยอดเสนอในหน้าลูกค้า แล้วยอดพยากรณ์จะคำนวณให้เอง' });
+    rows.sort(function (a, b) { return a.close < b.close ? -1 : a.close > b.close ? 1 : b.quote - a.quote; });
+    var t = iso(today());
+    return h('section', { class: 'stack', 'aria-label': 'ดีลที่คาดว่าจะปิดเดือนนี้' },
+      h('h3', { class: 'bars-title', text: 'ดีลที่คาดว่าจะปิดเดือนนี้ ' + rows.length + ' ราย' }),
+      h('div', { class: 'table-wrap', tabindex: '0', role: 'group', 'aria-label': 'ตารางดีลที่คาดว่าจะปิด เลื่อนซ้ายขวาได้' }, h('table', { class: 'crm-table' },
+        h('thead', null, h('tr', null, ['ลูกค้า', 'ขั้นตอน', 'วันที่คาดว่าจะปิด', 'ยอดเสนอ (บาท)', 'โอกาสปิด', 'ยอดถ่วงน้ำหนัก (บาท)'].map(function (x) { return h('th', { scope: 'col', text: x }); }))),
+        h('tbody', null, rows.map(function (c) {
+          return h('tr', null, h('td', null, h('a', { href: '#cust-' + c.id, text: c.name || '(ยังไม่ใส่ชื่อ)' })), h('td', { text: CRM_STAGES[c.stage] }),
+            h('td', { class: c.close < t ? 'is-late' : '', raw: fmtDate(parseISO(c.close), true) + (c.close < t ? ' (เลยแล้ว)' : '') }),
+            h('td', { class: 'amt', raw: money(c.quote) }), h('td', { raw: CRM_PROB[c.stage] + '%' }), h('td', { class: 'amt', raw: money(Math.round(c.quote * CRM_PROB[c.stage] / 100)) }));
+        })))),
+      h('p', { class: 'hint', text: 'โอกาสปิดเป็นค่าตั้งต้นตามขั้นตอน: ติดต่อครั้งแรก 10% · สำรวจความต้องการ 20% · นำเสนอและเดโม 40% · ส่งใบเสนอราคา 60% · ต่อรอง 80% เป็นการประมาณเพื่อวางแผน ไม่ใช่ยอดที่ได้จริง' }));
   }
   function crmGoals() {
     var x = crmStats();
@@ -1855,16 +1877,18 @@ label.btn{cursor:pointer}
       h('h2', { class: 'h2', text: 'เป้าและผลการขาย' }),
       h('div', { class: 'filters' }, h('div', { class: 'field field-sm' }, h('label', { class: 'label', for: 'crm-target', text: 'เป้ายอดขายของฉันต่อเดือน (บาท)' }), inp)),
       goalTiles(x, 'ของฉัน'),
+      crmForecastList(),
       crm.list.length ? h('div', { class: 'bars-grid' }, barList('เหตุผลที่ไม่ซื้อ', CRM_LOST.slice(1).concat(['ยังไม่ระบุ']), x.lr.slice(1).concat([x.lr[0]]), x.st[6]), barList('ที่มาของลูกค้า', CRM_SRC.slice(1).concat(['ยังไม่ระบุ']), x.sr.slice(1).concat([x.sr[0]]), x.n)) : null);
   }
   function todayLists() {
-    var t = iso(today()), soon = iso(addDays(today(), 3)), ap = crmAppts(true), out = { now: [], late: [], idle: [], quote: [], pay: [], exp: crmContracts() };
+    var t = iso(today()), soon = iso(addDays(today(), 3)), ap = crmAppts(true), out = { now: [], late: [], idle: [], quote: [], pay: [], close: [], exp: crmContracts() };
     ap.forEach(function (x) { if (x.a.date === t) out.now.push(x); else if (x.a.date < t) out.late.push(x); });
     crm.list.forEach(function (c) {
       var idle = crmIdle(c);
       if (c.stage === 3 && idle >= 3) out.quote.push({ c: c, idle: idle });
       else if (c.stage < 5 && idle >= 7) out.idle.push({ c: c, idle: idle });
       if ((c.pay === 1 || c.pay === 2) && c.due && c.due <= soon) out.pay.push({ c: c });
+      if (c.stage < 5 && c.close && c.close < t) out.close.push({ c: c });
     });
     out.idle.sort(function (a, b) { return b.idle - a.idle; }); out.quote.sort(function (a, b) { return b.idle - a.idle; });
     return out;
@@ -1876,6 +1900,7 @@ label.btn{cursor:pointer}
     sec('นัดที่เลยกำหนด', T.late.map(function (x) { return apptLabel(x.a) + ' ' + x.c.name + ' · ' + CRM_KIND[x.a.kind]; }));
     sec('ใบเสนอราคาที่ต้องตาม', T.quote.map(function (x) { return x.c.name + ' · ไม่ได้ติดต่อ ' + x.idle + ' วัน'; }));
     sec('ลูกค้าที่ไม่ได้ติดต่อเกิน 7 วัน', T.idle.map(function (x) { return x.c.name + ' · ' + CRM_STAGES[x.c.stage] + ' · ' + x.idle + ' วัน'; }));
+    sec('ดีลที่เลยวันที่คาดว่าจะปิด', T.close.map(function (x) { return x.c.name + ' · ' + CRM_STAGES[x.c.stage] + ' · คาดว่าจะปิด ' + fmtDate(parseISO(x.c.close), true); }));
     sec('ยอดค้างชำระที่ถึงกำหนด', T.pay.map(function (x) { return x.c.name + ' · ค้าง ' + money(Math.max(0, x.c.quote - x.c.paid)) + ' บาท · กำหนด ' + fmtDate(parseISO(x.c.due), true); }));
     sec('สัญญาใกล้หมด', T.exp.map(function (x) { return x.c.name + ' · ' + contractText(x.k); }));
     if (L.length === 2) L.push('', 'ไม่มีงานค้างสำหรับวันนี้');
@@ -1883,7 +1908,7 @@ label.btn{cursor:pointer}
   }
   function viewToday() {
     crmEnsure();
-    var T = todayLists(), root = h('div', { class: 'stack-lg' }), total = T.now.length + T.late.length + T.idle.length + T.quote.length + T.pay.length + T.exp.length;
+    var T = todayLists(), root = h('div', { class: 'stack-lg' }), total = T.now.length + T.late.length + T.idle.length + T.quote.length + T.pay.length + T.close.length + T.exp.length;
     root.appendChild(h('div', { class: 'page-head' }, h('h1', { class: 'h1', text: 'งานวันนี้' }), h('p', { class: 'lead', raw: fmtDate(today(), true) + ' · ' + (total ? 'มี ' + total + ' เรื่องที่ควรทำ' : 'ไม่มีงานค้าง') })));
     if (!crm.list.length) { root.appendChild(h('p', { class: 'empty', text: 'ยังไม่มีลูกค้า เพิ่มลูกค้าและนัดหมายก่อน แล้วงานที่ต้องทำในแต่ละวันจะขึ้นที่นี่' })); root.appendChild(h('div', { class: 'btn-row' }, h('a', { class: 'btn btn-primary', href: '#cust-new', text: 'เพิ่มลูกค้า' }), h('a', { class: 'btn', href: '#leads', text: 'หาลูกค้าใหม่' }))); return root; }
     function who(c) { return h('a', { href: '#cust-' + c.id, text: c.name || '(ยังไม่ใส่ชื่อ)' }); }
@@ -1900,6 +1925,7 @@ label.btn{cursor:pointer}
     sec('นัดที่เลยกำหนด', T.late, 'is-late', apRow);
     sec('ใบเสนอราคาที่ต้องตาม', T.quote, '', function (x) { return [h('span', { class: 'chip chip-now', raw: 'ไม่ได้ติดต่อ ' + x.idle + ' วัน' }), h('span', { class: 'appt-what' }, who(x.c), h('span', { class: 'muted num', raw: x.c.quote ? ' · ยอดเสนอ ' + money(x.c.quote) + ' บาท' : '' }))]; });
     sec('ลูกค้าที่ไม่ได้ติดต่อเกิน 7 วัน', T.idle, '', function (x) { return [h('span', { class: 'chip ' + (x.idle >= 14 ? 'chip-bad' : 'chip-now'), raw: x.idle + ' วัน' }), h('span', { class: 'appt-what' }, who(x.c), h('span', { class: 'muted', text: ' · ' + CRM_STAGES[x.c.stage] + ' · ' + CRM_INTEREST[x.c.interest] }))]; });
+    sec('ดีลที่เลยวันที่คาดว่าจะปิด', T.close, '', function (x) { return [h('span', { class: 'chip chip-bad', raw: 'คาดว่าจะปิด ' + fmtDate(parseISO(x.c.close), true) }), h('span', { class: 'appt-what' }, who(x.c), h('span', { class: 'muted', text: ' · ' + CRM_STAGES[x.c.stage] + ' · ปิดได้หรือยัง ถ้ายังให้เลื่อนวันที่ใหม่' }))]; });
     sec('ยอดค้างชำระที่ถึงกำหนด', T.pay, '', function (x) { var over = x.c.due < iso(today()); return [h('span', { class: 'chip ' + (over ? 'chip-bad' : 'chip-now'), raw: (over ? 'เลยกำหนด ' : 'กำหนด ') + fmtDate(parseISO(x.c.due), true) }), h('span', { class: 'appt-what' }, who(x.c), h('span', { class: 'muted num', raw: ' · ค้าง ' + money(Math.max(0, x.c.quote - x.c.paid)) + ' บาท' }))]; });
     sec('สัญญาใกล้หมด', T.exp, '', function (x) { return [h('span', { class: 'chip ' + (x.k.days <= 7 ? 'chip-bad' : 'chip-now'), raw: contractText(x.k) }), h('span', { class: 'appt-what' }, who(x.c), h('span', { class: 'muted num', raw: ' · หมดสัญญา ' + fmtDate(parseISO(x.c.cEnd), true) }))]; });
     if (!total) root.appendChild(h('p', { class: 'empty', text: 'วันนี้ไม่มีนัด ไม่มีลูกค้าที่ต้องตาม และไม่มีสัญญาใกล้หมด ใช้เวลานี้หาลูกค้าใหม่ได้' }));
@@ -1956,13 +1982,13 @@ label.btn{cursor:pointer}
     });
     return xlsxPromise;
   }
-  var XL_HEAD = ['ชื่อลูกค้า', 'ผู้ติดต่อ', 'โทร', 'LINE', 'อีเมล', 'ประเภทธุรกิจ', 'ช่องทางขาย', 'ออเดอร์ต่อวัน', 'แพ็กเกจที่สนใจ', 'ขั้นตอนการขาย', 'สถานะความสนใจ', 'สถานะการชำระ', 'ยอดเสนอ (บาท)', 'ชำระแล้ว (บาท)', 'กำหนดชำระ', 'บันทึกเพิ่มเติม', 'วันเริ่มสัญญา', 'วันหมดสัญญา', 'ที่มาของลูกค้า', 'เหตุผลที่ไม่ซื้อ'];
+  var XL_HEAD = ['ชื่อลูกค้า', 'ผู้ติดต่อ', 'โทร', 'LINE', 'อีเมล', 'ประเภทธุรกิจ', 'ช่องทางขาย', 'ออเดอร์ต่อวัน', 'แพ็กเกจที่สนใจ', 'ขั้นตอนการขาย', 'สถานะความสนใจ', 'สถานะการชำระ', 'ยอดเสนอ (บาท)', 'ชำระแล้ว (บาท)', 'กำหนดชำระ', 'บันทึกเพิ่มเติม', 'วันเริ่มสัญญา', 'วันหมดสัญญา', 'ที่มาของลูกค้า', 'เหตุผลที่ไม่ซื้อ', 'วันที่คาดว่าจะปิด'];
   function xlSafe(v) { v = String(v == null ? '' : v); return /^[=+\-@]/.test(v) ? "'" + v : v; }
   function xlBook(X, blank) {
     var rows = [XL_HEAD], logs = [['ชื่อลูกค้า', 'วันที่', 'ประเภท', 'ข้อความ']], ap = [['ชื่อลูกค้า', 'วันที่', 'เวลา', 'ประเภท', 'รายละเอียด', 'สถานะ']];
     if (blank) rows.push(['ร้านตัวอย่าง (ลบแถวนี้ก่อนอัปโหลด)', 'คุณตัวอย่าง', '0800000000', '', '', 'แบรนด์ที่มีคลังของตัวเอง', 'Shopee, Lazada', 300, CRM_PKG[5], CRM_STAGES[1], CRM_INTEREST[2], CRM_PAY[0], 550000, 0, '2026-12-31', '', '2026-11-01', '2030-10-31']);
     else crm.list.forEach(function (c) {
-      rows.push([c.name, c.contact, c.phone, c.line, c.email, c.biz, c.channels, c.orders || '', CRM_PKG[c.pkg], CRM_STAGES[c.stage], CRM_INTEREST[c.interest], CRM_PAY[c.pay], c.quote || '', c.paid || '', c.due, c.notes, c.cStart, c.cEnd, CRM_SRC[c.src], c.stage === 6 ? CRM_LOST[c.lost] : ''].map(function (v) { return typeof v === 'number' ? v : xlSafe(v); }));
+      rows.push([c.name, c.contact, c.phone, c.line, c.email, c.biz, c.channels, c.orders || '', CRM_PKG[c.pkg], CRM_STAGES[c.stage], CRM_INTEREST[c.interest], CRM_PAY[c.pay], c.quote || '', c.paid || '', c.due, c.notes, c.cStart, c.cEnd, CRM_SRC[c.src], c.stage === 6 ? CRM_LOST[c.lost] : '', c.close].map(function (v) { return typeof v === 'number' ? v : xlSafe(v); }));
       c.logs.forEach(function (l) { logs.push([xlSafe(c.name), l.date, CRM_LOG[l.kind], xlSafe(l.text)]); });
       c.appts.forEach(function (a) { ap.push([xlSafe(c.name), a.date, a.time, CRM_KIND[a.kind], xlSafe(a.note), a.done ? 'เสร็จแล้ว' : 'ยังไม่เสร็จ']); });
     });
@@ -2018,6 +2044,7 @@ label.btn{cursor:pointer}
       p = xlDate(r['กำหนดชำระ']); if (p) c.due = p;
       p = xlDate(r['วันเริ่มสัญญา']); if (p) c.cStart = p;
       p = xlDate(r['วันหมดสัญญา']); if (p) c.cEnd = p;
+      p = xlDate(r['วันที่คาดว่าจะปิด']); if (p) c.close = p;
       touched[c.id] = c;
     });
     var wl = wb.Sheets['การพูดคุย'];
@@ -2126,11 +2153,11 @@ label.btn{cursor:pointer}
       pkg: fSelect('c-pkg', CRM_PKG, c.pkg), stage: fSelect('c-stage', CRM_STAGES, c.stage), interest: fSelect('c-int', CRM_INTEREST, c.interest), pay: fSelect('c-pay', CRM_PAY, c.pay),
       quote: fInput('c-quote', 'number', c.quote || '', { min: '0', step: '1', inputmode: 'numeric' }), paid: fInput('c-paid', 'number', c.paid || '', { min: '0', step: '1', inputmode: 'numeric' }),
       src: fSelect('c-src', CRM_SRC, c.src), lost: fSelect('c-lost', CRM_LOST, c.lost),
-      due: fInput('c-due', 'date', c.due), cStart: fInput('c-cstart', 'date', c.cStart), cEnd: fInput('c-cend', 'date', c.cEnd), cLead: fSelect('c-clead', CRM_LEAD.map(function (d) { return d + ' วันก่อนหมดสัญญา'; }), c.cLead), notes: h('textarea', { class: 'input', id: 'c-notes', rows: '5', maxlength: '3000', raw: c.notes })
+      due: fInput('c-due', 'date', c.due), close: fInput('c-close', 'date', c.close), cStart: fInput('c-cstart', 'date', c.cStart), cEnd: fInput('c-cend', 'date', c.cEnd), cLead: fSelect('c-clead', CRM_LEAD.map(function (d) { return d + ' วันก่อนหมดสัญญา'; }), c.cLead), notes: h('textarea', { class: 'input', id: 'c-notes', rows: '5', maxlength: '3000', raw: c.notes })
     };
     function pull() {
       ['name', 'contact', 'phone', 'line', 'email', 'biz', 'channels', 'notes'].forEach(function (k) { c[k] = F[k].value.trim(); });
-      c.orders = crmAmt(F.orders.value); c.quote = crmAmt(F.quote.value); c.paid = crmAmt(F.paid.value); c.due = crmDate(F.due.value); c.src = crmIdx(F.src.value, CRM_SRC); c.lost = crmIdx(F.lost.value, CRM_LOST); c.cStart = crmDate(F.cStart.value); c.cEnd = crmDate(F.cEnd.value); c.cLead = crmIdx(F.cLead.value, CRM_LEAD);
+      c.orders = crmAmt(F.orders.value); c.quote = crmAmt(F.quote.value); c.paid = crmAmt(F.paid.value); c.due = crmDate(F.due.value); c.src = crmIdx(F.src.value, CRM_SRC); c.lost = crmIdx(F.lost.value, CRM_LOST); c.cStart = crmDate(F.cStart.value); c.cEnd = crmDate(F.cEnd.value); c.close = crmDate(F.close.value); c.cLead = crmIdx(F.cLead.value, CRM_LEAD);
       c.pkg = crmIdx(F.pkg.value, CRM_PKG); c.stage = crmIdx(F.stage.value, CRM_STAGES); c.interest = crmIdx(F.interest.value, CRM_INTEREST); c.pay = crmIdx(F.pay.value, CRM_PAY);
     }
     var apHost = h('ul', { class: 'appts' });
@@ -2177,7 +2204,7 @@ label.btn{cursor:pointer}
     }
     function card(title, kids) { return h('section', { class: 'sheet' }, h('div', { class: 'sheet-top' }, h('h2', { class: 'h2', text: title })), h('div', { class: 'form-grid' }, kids)); }
     form.appendChild(card('ข้อมูลลูกค้า', [fField('ชื่อลูกค้าหรือชื่อร้าน', F.name), fField('ผู้ติดต่อ', F.contact), fField('เบอร์โทร', F.phone), fField('LINE', F.line), fField('อีเมล', F.email), fField('ประเภทธุรกิจ', F.biz), fField('ช่องทางขาย', F.channels), fField('ออเดอร์เฉลี่ยต่อวัน', F.orders), fField('ที่มาของลูกค้า', F.src)]));
-    form.appendChild(card('สถานะการขาย', [fField('ขั้นตอนการขาย', F.stage), fField('สถานะความสนใจ', F.interest), fField('แพ็กเกจที่สนใจ', F.pkg), fField('ยอดเสนอ (บาท)', F.quote), fField('เหตุผลที่ไม่ซื้อ (เมื่อขั้นตอนเป็น “ไม่ซื้อ”)', F.lost)]));
+    form.appendChild(card('สถานะการขาย', [fField('ขั้นตอนการขาย', F.stage), fField('สถานะความสนใจ', F.interest), fField('แพ็กเกจที่สนใจ', F.pkg), fField('ยอดเสนอ (บาท)', F.quote), fField('วันที่คาดว่าจะปิด', F.close), fField('เหตุผลที่ไม่ซื้อ (เมื่อขั้นตอนเป็น “ไม่ซื้อ”)', F.lost)]));
     form.appendChild(card('การชำระ', [fField('สถานะการชำระ', F.pay), fField('ชำระแล้ว (บาท)', F.paid), fField('กำหนดชำระ', F.due)]));
     var cMsg = h('p', { class: 'hint', role: 'status' }), cCalc = h('button', { type: 'button', class: 'btn', text: 'คำนวณวันหมดสัญญาจากแพ็กเกจ' });
     function cShow() { var k = contractOf({ cEnd: crmDate(F.cEnd.value), cLead: crmIdx(F.cLead.value, CRM_LEAD) }); cMsg.textContent = k ? contractText(k) + (k.st === 'ok' ? ' · จะเริ่มแจ้งเตือน ' + fmtDate(addDays(parseISO(F.cEnd.value), -CRM_LEAD[crmIdx(F.cLead.value, CRM_LEAD)]), true) : ' · อยู่ในช่วงแจ้งเตือนแล้ว') : ''; cMsg.className = 'hint'; }
