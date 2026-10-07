@@ -839,6 +839,13 @@ label.btn{cursor:pointer}
 .ho-checks label{padding-inline:0}
 
 .tpl-out{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:400 1.0313rem/1.8 var(--font-body);background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:1rem 1.1rem;box-shadow:var(--shadow)}
+
+.member-cust{padding:0}
+.member-cust summary{cursor:pointer;padding:.8rem 1rem;line-height:1.9}
+.kv-row{display:flex;flex-direction:column;gap:.05rem;overflow-wrap:anywhere}
+.fb-auth{max-width:28rem;margin-inline:auto;display:flex;flex-direction:column;gap:1.25rem}
+.fb-auth .form-grid{grid-template-columns:1fr}
+.fb-link{background:none;border:0;padding:0;color:var(--steel);font-weight:600;cursor:pointer;text-decoration:underline}
 </style>
 <div class="page" id="top">
   <header class="mbar">
@@ -1264,7 +1271,7 @@ label.btn{cursor:pointer}
     var img = $('#who-avatar');
     if (state.me.kind === 'account' && state.me.avatarUrl) { img.src = state.me.avatarUrl; img.hidden = false; }
     else { img.hidden = true; img.removeAttribute('src'); }
-    $('#who-out').textContent = state.me.kind === 'account' ? 'เปลี่ยนผู้เรียน' : 'ออกจากระบบ';
+    $('#who-out').textContent = state.me.kind === 'account' && !window.JST_FB_API ? 'เปลี่ยนผู้เรียน' : 'ออกจากระบบ';
   }
   function learnerLine() {
     return 'ผู้เรียน: ' + state.me.name + (state.me.team ? ' · ' + state.me.team : '');
@@ -1701,6 +1708,67 @@ label.btn{cursor:pointer}
     b.hidden = !n; b.textContent = n ? String(n) : '';
     b.setAttribute('aria-label', n ? 'สัญญาใกล้หมด ' + n + ' ราย' : '');
   }
+  /* ---------- ส่วนของหัวหน้าทีมบนระบบออนไลน์ (Firebase) ---------- */
+  function fbTeamAdmin() {
+    var A = window.JST_FB_API;
+    if (!A || !auth.canEdit) return null;
+    setTimeout(fbPaintMembers, 0);
+    return h('div', { class: 'stack-lg' },
+      h('section', { class: 'stack' }, h('h2', { class: 'h2', text: 'สมาชิกและสิทธิ์' }), h('p', { class: 'muted', text: 'ผู้ที่สมัครใหม่ต้องได้รับอนุมัติก่อนจึงจะเข้าใช้งานได้ หัวหน้าทีมเห็นข้อมูลลูกค้าของสมาชิกทุกคน' }), h('div', { id: 'fb-members', class: 'stack' }, h('p', { class: 'empty', text: 'กำลังโหลดรายชื่อสมาชิก' }))),
+      h('section', { class: 'stack' }, h('h2', { class: 'h2', text: 'ลูกค้าของสมาชิก' }), h('div', { id: 'fb-cust', class: 'stack' }, h('p', { class: 'empty', text: 'เลือกสมาชิกจากตารางด้านบนเพื่อดูลูกค้า' }))));
+  }
+  function fbPaintMembers() {
+    var A = window.JST_FB_API, box = $('#fb-members');
+    if (!A || !box) return;
+    A.listUsers().then(function (list) {
+      var b = $('#fb-members');
+      if (!b) return;
+      list.sort(function (x, y) { return (x.approved ? 1 : 0) - (y.approved ? 1 : 0) || (x.name < y.name ? -1 : 1); });
+      var tb = h('tbody', null, list.map(function (u) {
+        var me = u.id === A.uid, act = h('div', { class: 'btn-row' });
+        function btn(label, fn, primary) { var x = h('button', { type: 'button', class: 'btn btn-sm' + (primary ? ' btn-primary' : ''), text: label }); x.addEventListener('click', function () { x.disabled = true; fn().then(fbPaintMembers, function () { x.disabled = false; x.textContent = 'ทำไม่สำเร็จ ลองอีกครั้ง'; }); }); act.appendChild(x); }
+        var see = h('button', { type: 'button', class: 'btn btn-sm', text: 'ดูลูกค้า' });
+        see.addEventListener('click', function () { fbShowCustomers(u.id, u.name); });
+        if (u.approved) act.appendChild(see);
+        if (!me) {
+          if (!u.approved) btn('อนุมัติ', function () { return A.setUser(u.id, { approved: true }); }, true);
+          else btn('ระงับการใช้งาน', function () { return A.setUser(u.id, { approved: false }); });
+          if (u.approved) btn(u.role === 'manager' ? 'เปลี่ยนเป็นเซลส์' : 'ตั้งเป็นหัวหน้าทีม', function () { return A.setUser(u.id, { role: u.role === 'manager' ? 'sales' : 'manager' }); });
+        }
+        return h('tr', null, h('td', null, h('b', { text: (u.name || '(ไม่มีชื่อ)') + (me ? ' (คุณ)' : '') }), h('div', { class: 'muted small', raw: u.email || '' })), h('td', { text: u.team || '–' }),
+          h('td', null, h('span', { class: 'chip ' + (u.approved ? 'chip-pass' : 'chip-now'), text: u.approved ? 'ใช้งานได้' : 'รออนุมัติ' })), h('td', { text: u.role === 'manager' ? 'หัวหน้าทีม' : 'เซลส์' }), h('td', null, act));
+      }));
+      b.textContent = '';
+      b.appendChild(h('div', { class: 'table-wrap', tabindex: '0', role: 'group', 'aria-label': 'ตารางสมาชิก เลื่อนซ้ายขวาได้' }, h('table', { class: 'crm-table' }, h('thead', null, h('tr', null, ['สมาชิก', 'ทีม', 'สถานะ', 'บทบาท', 'จัดการ'].map(function (x) { return h('th', { scope: 'col', text: x }); }))), tb)));
+    }, function () { var b = $('#fb-members'); if (b) { b.textContent = ''; b.appendChild(h('p', { class: 'empty', text: 'โหลดรายชื่อสมาชิกไม่ได้ ตรวจกฎสิทธิ์ของฐานข้อมูลและลองโหลดหน้าใหม่' })); } });
+  }
+  function fbShowCustomers(uid, name) {
+    var box = $('#fb-cust');
+    if (!box || !auth.db) return;
+    box.textContent = ''; box.appendChild(h('p', { class: 'empty', text: 'กำลังโหลดลูกค้าของ ' + name }));
+    var col;
+    try { col = auth.db.doc('data/users/' + uid + '/crm').collection('customers'); } catch (e) { return; }
+    col.get().then(function (snap) {
+      var b = $('#fb-cust');
+      if (!b) return;
+      var list = snap.docs.map(function (d) { return cleanCustomer(d.data()); }).filter(Boolean).sort(function (x, y) { return x.updatedAt < y.updatedAt ? 1 : -1; });
+      b.textContent = '';
+      b.appendChild(h('p', { class: 'muted num', raw: 'ลูกค้าของ ' + name + ' ' + list.length + ' ราย · ดูได้อย่างเดียว แก้ไขไม่ได้' }));
+      if (!list.length) { b.appendChild(h('p', { class: 'empty', text: 'สมาชิกคนนี้ยังไม่มีลูกค้าในระบบออนไลน์' })); return; }
+      list.forEach(function (c) {
+        var nx = crmNext(c), k = contractOf(c);
+        function row(l, v) { return v ? h('div', { class: 'kv-row' }, h('span', { class: 'label', text: l }), h('span', { text: v })) : null; }
+        b.appendChild(h('details', { class: 'sheet member-cust' },
+          h('summary', null, h('b', { text: c.name || '(ยังไม่ใส่ชื่อ)' }), h('span', { class: 'muted', text: ' · ' + CRM_STAGES[c.stage] }), ' ', h('span', { class: 'chip ' + CRM_INT_CLS[c.interest], text: CRM_INTEREST[c.interest] }), ' ', h('span', { class: 'chip ' + CRM_PAY_CLS[c.pay], text: CRM_PAY[c.pay] }), c.quote ? h('span', { class: 'muted num', raw: ' · ' + money(c.quote) + ' บาท' }) : null),
+          h('div', { class: 'gate-body stack-s' },
+            row('ผู้ติดต่อ', [c.contact, c.phone, c.line, c.email].filter(Boolean).join(' · ')), row('ธุรกิจ', [c.biz, c.channels, c.orders ? 'วันละ ' + money(c.orders) + ' ออเดอร์' : ''].filter(Boolean).join(' · ')),
+            row('แพ็กเกจและยอด', CRM_PKG[c.pkg] + (c.quote ? ' · เสนอ ' + money(c.quote) + ' บาท' : '') + (c.paid ? ' · ชำระแล้ว ' + money(c.paid) + ' บาท' : '')),
+            row('สัญญา', c.cEnd ? (c.cStart ? 'เริ่ม ' + fmtDate(parseISO(c.cStart), true) + ' · ' : '') + 'หมด ' + fmtDate(parseISO(c.cEnd), true) + (k ? ' · ' + contractText(k) : '') : ''),
+            row('นัดถัดไป', nx ? apptLabel(nx.a) + ' · ' + CRM_KIND[nx.a.kind] + (nx.a.note ? ' · ' + nx.a.note : '') + (nx.late ? ' (เลยกำหนด)' : '') : ''), row('บันทึกเพิ่มเติม', c.notes),
+            c.logs.length ? h('div', null, h('span', { class: 'label', text: 'บันทึกการพูดคุย' }), h('ul', { class: 'logs' }, c.logs.slice().sort(function (x, y) { return x.date < y.date ? 1 : -1; }).slice(0, 20).map(function (l) { return h('li', { class: 'log' }, h('div', { class: 'log-head' }, h('b', { class: 'num', raw: fmtDate(parseISO(l.date), true) }), h('span', { class: 'chip', text: CRM_LOG[l.kind] })), h('p', { class: 'log-text', text: l.text })); }))) : null)));
+      });
+    }, function () { var b = $('#fb-cust'); if (b) { b.textContent = ''; b.appendChild(h('p', { class: 'empty', text: 'โหลดลูกค้าของสมาชิกคนนี้ไม่ได้ ตรวจว่าบัญชีของคุณเป็นหัวหน้าทีม' })); } });
+  }
   function crmGet(id) { for (var i = 0; i < crm.list.length; i++) if (crm.list[i].id === id) return crm.list[i]; return null; }
   function crmSave(c) {
     c.updatedAt = new Date().toISOString();
@@ -1721,7 +1789,7 @@ label.btn{cursor:pointer}
     if (crm.col) crm.col.doc(id).delete().then(function () { crmDropTomb(id); }, function () {});
     crmPushSum();
   }
-  function crmWhere() { return crm.col ? 'บันทึกในบัญชี Claude ของคุณและในเครื่องนี้ รายละเอียดลูกค้ามีแต่คุณที่เห็น ส่วนหัวหน้าทีมเห็นเฉพาะตัวเลขสรุป เช่น จำนวนลูกค้าและยอดรวม' : 'บันทึกในเบราว์เซอร์ของเครื่องนี้เท่านั้น ถ้าเปลี่ยนเครื่องหรือล้างข้อมูลเบราว์เซอร์ ข้อมูลจะไม่ตามไป'; }
+  function crmWhere() { return crm.col && window.JST_FB_API ? 'บันทึกในระบบออนไลน์ของทีมและในเครื่องนี้ คุณและหัวหน้าทีมเห็นรายละเอียดลูกค้าของคุณ สมาชิกคนอื่นไม่เห็น' : crm.col ? 'บันทึกในบัญชี Claude ของคุณและในเครื่องนี้ รายละเอียดลูกค้ามีแต่คุณที่เห็น ส่วนหัวหน้าทีมเห็นเฉพาะตัวเลขสรุป เช่น จำนวนลูกค้าและยอดรวม' : 'บันทึกในเบราว์เซอร์ของเครื่องนี้เท่านั้น ถ้าเปลี่ยนเครื่องหรือล้างข้อมูลเบราว์เซอร์ ข้อมูลจะไม่ตามไป'; }
   function crmAppts(openOnly) {
     var out = [];
     crm.list.forEach(function (c) { c.appts.forEach(function (a) { if (!openOnly || !a.done) out.push({ c: c, a: a }); }); });
@@ -2224,6 +2292,32 @@ label.btn{cursor:pointer}
       'ตอบเป็น JSON เท่านั้น ตามรูปแบบนี้: {"score":"สูง|กลาง|ต่ำ","reason":"เหตุผลสั้น ๆ 1-2 ประโยค","shop":"ชื่อร้านหรือธุรกิจถ้าข้อความระบุ","biz":"ประเภทธุรกิจและช่องทางขายเท่าที่ข้อความบอก","pkg":"OMS|WMS|ยังไม่ชัด","signals":["สัญญาณที่พบในข้อความ ไม่เกิน 4 ข้อ"],"ask":["คำถามที่ควรถามเพิ่ม ไม่เกิน 3 ข้อ"],"opener":"ข้อความทักครั้งแรก ไม่เกิน 4 บรรทัด"}',
       '', 'แหล่งที่พบ: ' + (L.src || 'ไม่ระบุ'), 'ข้อความ:', L.text.slice(0, 3000)].join('\n');
   }
+  function leadRule(L) {
+    var t = L.text, tl = t.toLowerCase(), tk = TOKENS[state.particle], sc = 0, sig = [], oms = 0, wms = 0, pain = '';
+    var R = [
+      [/สต็อกไม่ตรง|สต๊อกไม่ตรง|ขายเกิน|ของหมดแต่ยังขาย|ตัดสต็อก|ตัดสต๊อก/, 'มีปัญหาสต็อกไม่ตรงหรือขายเกินสต็อก', 3, 'o', 'เรื่องสต็อกไม่ตรง'],
+      [/หยิบผิด|แพ็กผิด|แพ็คผิด|ส่งผิด|ส่งไม่ครบ|หาของไม่เจอ|พนักงานคลัง|โกดัง|คลังสินค้า|จัดคลัง/, 'มีงานคลังหรือปัญหาหยิบและแพ็ก', 3, 'w', 'เรื่องงานคลังและการแพ็ก'],
+      [/fulfillment|ฟูลฟิล|รับฝากสินค้า|แพ็กส่งให้ร้าน/, 'เป็นผู้ให้บริการ Fulfillment หรือดูแลสินค้าให้หลายร้าน', 3, 'w', 'เรื่องการดูแลสินค้าหลายร้านในคลังเดียว'],
+      [/หาระบบ|แนะนำระบบ|แนะนำโปรแกรม|มีระบบไหน|ระบบไหนดี|โปรแกรมไหนดี|ใช้ระบบอะไร|ระบบหลังร้าน|ระบบหลังบ้าน|ระบบจัดการ|\berp\b|\bwms\b|\boms\b/, 'กำลังมองหาหรือเปรียบเทียบระบบ', 3, '', ''],
+      [/หลายแพลตฟอร์ม|หลายช่องทาง|หลายร้าน|shopee|lazada|tiktok|ช้อปปี้|ลาซาด้า|ติ๊กต็อก/, 'ขายหลายช่องทางหรือหลายร้าน', 2, 'o', ''],
+      [/ออเดอร์เยอะ|ออเดอร์ล้น|แพ็กไม่ทัน|แพ็คไม่ทัน|ตอบไม่ทัน|รับสมัคร.{0,20}(แพ็ก|แพ็ค|แอดมิน)|วันละ\s*\d{3,}/, 'ออเดอร์เริ่มเกินกำลังคน', 2, '', 'เรื่องออเดอร์ที่เริ่มล้นมือ'],
+      [/excel|เอ็กเซล|จดมือ|ทำมือ|เช็กทีละร้าน|เปิดทีละร้าน/, 'ยังจัดการด้วยมือหรือ Excel', 1, 'o', ''],
+      [/ไลฟ์|\bcf\b|คอมเมนต์/, 'ขายผ่านไลฟ์สด', 1, 'o', '']
+    ];
+    R.forEach(function (r) { if (r[0].test(tl)) { sc += r[2]; sig.push(r[1]); if (r[3] === 'o') oms += r[2]; if (r[3] === 'w') wms += r[2]; if (!pain && r[4]) pain = r[4]; } });
+    var ad = /รับทำ|รับวางระบบ|บริการของเรา|สนใจทัก|สนใจ inbox|ทักแชท|โปรโมชั่น|ราคาเริ่มต้น|ทดลองใช้ฟรี/.test(tl);
+    if (ad) { sc -= 4; sig.push('ข้อความนี้อาจเป็นโฆษณาของผู้ให้บริการ ไม่ใช่ผู้ที่กำลังหาระบบ'); }
+    var ask = [];
+    if (!/\d+\s*(ออเดอร์|ออร์เดอร์|บิล|กล่อง)|วันละ\s*\d/.test(tl)) ask.push('ออเดอร์เฉลี่ยวันละเท่าไร');
+    if (!/shopee|lazada|tiktok|ช้อปปี้|ลาซาด้า|ติ๊กต็อก|ไลฟ์|หน้าร้าน|เว็บ/.test(tl)) ask.push('ขายผ่านช่องทางไหนบ้าง กี่ร้าน');
+    if (!/คลัง|โกดัง|แพ็กที่บ้าน|แพ็คที่บ้าน|fulfillment/.test(tl)) ask.push('เก็บและแพ็กสินค้าที่ไหน มีพนักงานคลังกี่คน');
+    ask = ask.slice(0, 3);
+    var score = sc >= 5 ? 'สูง' : sc >= 3 ? 'กลาง' : 'ต่ำ', pkg = wms >= 3 ? 'WMS' : oms >= 2 ? 'OMS' : 'ยังไม่ชัด';
+    var reason = ad && sc <= 0 ? 'ข้อความมีลักษณะเป็นโฆษณาของผู้ให้บริการ ไม่น่าใช่ผู้ที่กำลังหาระบบ' : sc <= 0 ? 'ไม่พบสัญญาณว่าผู้เขียนกำลังมีปัญหาหลังร้านหรือกำลังหาระบบ' : 'พบสัญญาณ ' + sig.length + ' ข้อ' + (pkg !== 'ยังไม่ชัด' ? ' ลักษณะงานไปทาง ' + pkg : '') + (ad ? ' แต่ข้อความมีลักษณะเป็นโฆษณา ให้ตรวจก่อนทัก' : '');
+    var q1 = ask[0] || 'ตอนนี้งานส่วนไหนกินเวลาทีมมากที่สุด';
+    var opener = sc <= 0 ? '' : 'สวัสดี' + tk.k + ' ' + tk.i + 'ชื่อ' + state.me.name + ' จาก JST ERP ระบบจัดการออเดอร์ สต็อก และคลังสินค้าสำหรับร้านออนไลน์' + tk.k + '\n' + (pain ? 'เห็นที่เล่า' + pain + ' ' : 'เห็นโพสต์ของคุณ ') + 'ขออนุญาตถามสั้น ๆ ' + tk.k + 'ว่า' + q1 + tk.q + ' จะได้แนะนำข้อมูลที่ตรงกับร้าน ถ้ายังไม่สะดวกคุย บอก' + tk.i + 'ได้เลย' + tk.k;
+    return { score: score, reason: reason, shop: '', biz: '', pkg: pkg, signals: sig.slice(0, 5), ask: ask, opener: opener, rule: true };
+  }
   function viewLeads() {
     if (!state.leads) state.leads = { kw: '', text: '', src: '', res: null, busy: false, note: '' };
     var L = state.leads, aiOff = auth.sample === null || !auth.samplePromise;
@@ -2240,7 +2334,7 @@ label.btn{cursor:pointer}
 
     var ta = h('textarea', { class: 'input', id: 'lead-text', rows: '6', maxlength: '3000', placeholder: 'วางข้อความโพสต์ คำถาม หรือประกาศที่เจอ', raw: L.text });
     var src = fInput('lead-src', 'text', L.src, { maxlength: '120', placeholder: 'เช่น กลุ่ม Facebook แม่ค้าออนไลน์ หรือลิงก์โพสต์' });
-    var send = h('button', { type: 'submit', class: 'btn btn-primary', text: 'ให้ AI ประเมิน' }), out = h('div', { class: 'stack', 'aria-live': 'polite' });
+    var send = h('button', { type: 'submit', class: 'btn btn-primary', text: (auth.sample === null || !auth.samplePromise) ? 'ประเมินข้อความ' : 'ให้ AI ประเมิน' }), out = h('div', { class: 'stack', 'aria-live': 'polite' });
     function toCustomer() {
       var r = L.res || {}, c = cleanCustomer({ id: crmId('c') });
       c.name = crmStr(r.shop, 120); c.biz = crmStr(r.biz, 120);
@@ -2251,7 +2345,7 @@ label.btn{cursor:pointer}
       go({ name: 'cust', id: 'new' });
     }
     function paint() {
-      send.disabled = L.busy || aiOff;
+      send.disabled = L.busy;
       out.textContent = '';
       if (L.busy) { out.appendChild(h('p', { class: 'empty', text: 'กำลังประเมิน ถ้ามีหน้าต่างขออนุญาตใช้ Claude ให้กดอนุญาตก่อน' })); return; }
       if (L.note) out.appendChild(h('p', { class: 'form-error', text: L.note }));
@@ -2259,9 +2353,9 @@ label.btn{cursor:pointer}
       save.addEventListener('click', function () { L.text = ta.value; L.src = src.value.trim(); if (!L.text.trim()) { L.note = 'วางข้อความก่อนบันทึก'; paint(); return; } toCustomer(); });
       if (!L.res) { if (aiOff || L.note) out.appendChild(h('div', { class: 'btn-row' }, save)); return; }
       var r = L.res, cls = r.score === 'สูง' ? 'chip-pass' : r.score === 'กลาง' ? 'chip-now' : '';
-      var card = scriptNode(['ข้อความทักครั้งแรก', r.opener || '', 'อ้างถึงปัญหาที่เขาเล่าเอง และจบด้วยคำถาม ปรับถ้อยคำให้เข้ากับช่องทางก่อนส่ง'], 'ร่างโดย AI');
+      var card = scriptNode(['ข้อความทักครั้งแรก', r.opener || '', 'อ้างถึงปัญหาที่เขาเล่าเอง และจบด้วยคำถาม ปรับถ้อยคำให้เข้ากับช่องทางก่อนส่ง'], r.rule ? 'ร่างจากแม่แบบ' : 'ร่างโดย AI');
       out.appendChild(h('section', { class: 'sheet' },
-        h('div', { class: 'sheet-top' }, h('h2', { class: 'h2', text: 'ผลประเมิน' }), h('span', { class: 'chip ' + cls, raw: 'ความน่าสนใจ: ' + (r.score || 'ไม่ทราบ') }), h('span', { class: 'chip', raw: 'น่าจะเหมาะกับ: ' + (r.pkg || 'ยังไม่ชัด') })),
+        h('div', { class: 'sheet-top' }, h('h2', { class: 'h2', text: r.rule ? 'ผลประเมินเบื้องต้น (ไม่ใช้ AI)' : 'ผลประเมิน' }), h('span', { class: 'chip ' + cls, raw: 'ความน่าสนใจ: ' + (r.score || 'ไม่ทราบ') }), h('span', { class: 'chip', raw: 'น่าจะเหมาะกับ: ' + (r.pkg || 'ยังไม่ชัด') })),
         h('div', { class: 'gate-body stack' }, h('p', { text: r.reason || '' }),
           r.signals.length ? h('div', null, h('span', { class: 'label', text: 'สัญญาณที่พบ' }), h('ul', { class: 'notes' }, r.signals.map(function (x) { return h('li', { text: x }); }))) : null,
           r.ask.length ? h('div', null, h('span', { class: 'label', text: 'ควรถามเพิ่ม' }), h('ul', { class: 'notes' }, r.ask.map(function (x) { return h('li', { text: x }); }))) : null)));
@@ -2272,19 +2366,20 @@ label.btn{cursor:pointer}
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       L.text = ta.value; L.src = src.value.trim();
-      if (L.busy || aiOff) return;
+      if (L.busy) return;
       if (L.text.trim().length < 10) { L.note = 'วางข้อความที่พบก่อน อย่างน้อย 1 ประโยค'; L.res = null; paint(); ta.focus(); return; }
+      if (aiOff) { L.note = ''; L.res = leadRule(L); paint(); return; }
       L.busy = true; L.note = ''; L.res = null; paint();
       auth.samplePromise.then(function (sample) {
-        if (!sample || typeof sample.json !== 'function') { L.busy = false; L.note = 'ตอนนี้ใช้ AI ไม่ได้ ให้เข้าสู่ระบบ Claude และอนุญาตให้หน้านี้ใช้ Claude คุณยังบันทึกข้อความนี้เป็นลูกค้าได้'; if (state.leads === L && out.isConnected) paint(); return null; }
+        if (!sample || typeof sample.json !== 'function') { L.busy = false; L.note = ''; L.res = leadRule(L); if (state.leads === L && out.isConnected) paint(); return null; }
         return sample.json(leadPrompt(L), { cache: false }).then(function (j) {
           j = asObject(j);
           function list(v, n) { return (Array.isArray(v) ? v : []).filter(function (x) { return typeof x === 'string' && x.trim(); }).slice(0, n).map(function (x) { return x.slice(0, 300); }); }
           L.res = { score: ['สูง', 'กลาง', 'ต่ำ'].indexOf(j.score) >= 0 ? j.score : '', reason: crmStr(j.reason, 600), shop: crmStr(j.shop, 120), biz: crmStr(j.biz, 120), pkg: ['OMS', 'WMS'].indexOf(j.pkg) >= 0 ? j.pkg : 'ยังไม่ชัด', signals: list(j.signals, 4), ask: list(j.ask, 3), opener: crmStr(j.opener, 1200) };
-        }, function (e2) { L.note = askErrorNote(e2 && e2.code); }).then(function () { L.busy = false; if (state.leads === L && out.isConnected) paint(); });
+        }, function (e2) { L.res = leadRule(L); L.note = ''; }).then(function () { L.busy = false; if (state.leads === L && out.isConnected) paint(); });
       });
     });
-    root.appendChild(h('section', { class: 'stack' }, h('h2', { class: 'h2', text: '2. วางข้อความที่เจอ ให้ AI ช่วยประเมิน' }), form, out));
+    root.appendChild(h('section', { class: 'stack' }, h('h2', { class: 'h2', text: aiOff ? '2. วางข้อความที่เจอ เพื่อประเมินเบื้องต้น' : '2. วางข้อความที่เจอ ให้ AI ช่วยประเมิน' }), aiOff ? h('p', { class: 'muted', text: 'เครื่องนี้ใช้ AI ไม่ได้ ระบบจะประเมินจากคำสำคัญในข้อความ เช่น สต็อกไม่ตรง หยิบผิด หลายแพลตฟอร์ม แล้วร่างข้อความทักจากแม่แบบ ผลจะหยาบกว่า AI ให้อ่านทวนก่อนใช้' }) : null, form, out));
     root.appendChild(h('aside', { class: 'note note-warn' }, h('span', { class: 'tag', text: 'ก่อนทักลูกค้า' }),
       h('p', { text: 'หน้านี้ไม่ได้ดึงข้อมูลจากเว็บเอง คุณเป็นคนค้นและเลือกข้อความมาวาง ให้บันทึกเฉพาะข้อมูลของร้านหรือธุรกิจที่เจ้าของเปิดเผยเอง ไม่เก็บเบอร์หรือข้อมูลส่วนตัวที่เขาไม่ได้ให้ไว้เพื่อการติดต่อ ทำตามกติกาของกลุ่มและแพลตฟอร์มนั้น และหยุดติดต่อเมื่อเขาไม่สนใจ' })));
     paint();
@@ -3796,6 +3891,7 @@ label.btn{cursor:pointer}
       h('p', { class: 'lead', text: 'คะแนนดีที่สุดของแต่ละคนในแต่ละบท เฉพาะเจ้าของหน้าและผู้ที่มีสิทธิ์แก้ไขหน้านี้เท่านั้นที่เห็นตารางนี้' })
     ));
     root.appendChild(h('section', { class: 'stack' }, h('h2', { class: 'h2', text: 'แดชบอร์ดงานขายของทีม' }), h('div', { id: 'team-sales', class: 'stack' })));
+    root.appendChild(fbTeamAdmin());
     root.appendChild(h('h2', { class: 'h2', text: 'ผลแบบฝึกหัดของทีม' }));
     root.appendChild(h('div', { id: 'team-body', class: 'stack' }));
     root.appendChild(h('aside', { class: 'note' },
