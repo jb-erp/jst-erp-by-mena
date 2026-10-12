@@ -53,9 +53,13 @@ function explain(e, phase) {
   const code = e && e.code;
   const raw = e && e.message ? String(e.message).slice(0, 280) : '';
   switch (code) {
+    case 'network':
+      return { msg: phase === 'start' ? 'ติดต่อ Apify ไม่ได้ ตรวจอินเทอร์เน็ต แล้วดูที่ Apify Console ว่ามีการรันเกิดขึ้นหรือไม่ก่อนกดอีกครั้ง' : 'ติดต่อ Apify ไม่ได้ชั่วคราว ตรวจอินเทอร์เน็ตแล้วกดลองอีกครั้ง' };
     case 'needs_reauth':
+      if (STANDALONE) return { msg: 'Apify ไม่รับ token นี้ อาจพิมพ์ผิดหรือถูกยกเลิกไปแล้ว ใส่ token ใหม่ที่เมนู ตั้งค่า Apify', settings: true };
       return { msg: 'การเชื่อมต่อ Apify หมดอายุ เชื่อมต่อใหม่ที่ Settings → Connectors ใน claude.ai แล้วกดอีกครั้ง' };
     case 'server_not_connected': case 'selection_required': case 'server_not_found':
+      if (STANDALONE) return { msg: 'ยังไม่ได้ใส่ Apify API token ของเครื่องนี้ ใส่ได้ที่เมนู ตั้งค่า Apify ยังไม่ได้สั่งงานและไม่มีค่าใช้จ่าย', settings: true };
       return { msg: 'บัญชี Claude นี้ยังไม่ได้เชื่อมต่อ Apify หรือยังไม่ได้เลือกบัญชีที่จะใช้ ตั้งค่าได้ที่ Settings → Connectors ใน claude.ai' };
     case 'not_in_manifest': case 'consent_required':
       return { msg: 'หน้านี้ยังไม่ได้รับอนุญาตให้ใช้ Apify เปิดสิทธิ์ได้จากเมนู Permissions ของหน้านี้', manage: true };
@@ -89,6 +93,13 @@ async function checkApify() {
     if (!sv || (Array.isArray(sv.tools) && !sv.tools.length && sv.authStatus !== 'needs_reauth')) S.mcpState = 'missing';
     else S.mcpState = sv.authStatus === 'needs_reauth' ? 'reauth' : 'ready';
   } catch (e) { S.mcpState = 'ready'; }       // listing failed: the first call will report the real reason
+  if (STANDALONE && S.mcpState === 'ready') {
+    try {
+      const d = await window.__ltpl.limits();
+      applyUsage({ used: d.current.monthlyUsageUsd, limit: d.limits.maxMonthlyUsageUsd, start: d.monthlyUsageCycle.startAt, end: d.monthlyUsageCycle.endAt, at: new Date().toISOString(), src: 'apify' });
+      S.usageFull = false;
+    } catch (e) { if (e && e.code === 'needs_reauth') S.mcpState = 'reauth'; }
+  }
   renderFind(true);
   scheduleRender();
 }
@@ -647,10 +658,12 @@ function renderApifyState() {
   let cls = 'note', text, tip = '';
   if (S.mcpState === 'pending') text = 'กำลังตรวจการเชื่อมต่อ Apify…';
   else if (S.mcpState === 'absent') { text = 'มุมมองนี้สั่ง Apify จากในแอปไม่ได้'; tip = ' ใช้ช่อง "ให้ Claude ค้นแทน" ในหน้านี้ได้'; }
+  else if (STANDALONE && S.mcpState === 'missing') { cls = 'note bad'; text = 'ยังไม่ได้ใส่ Apify API token ของเครื่องนี้ ใส่ได้ที่เมนู ตั้งค่า Apify'; }
+  else if (STANDALONE && S.mcpState === 'reauth') { cls = 'note bad'; text = 'Apify ไม่รับ token ของเครื่องนี้ ใส่ token ใหม่ที่เมนู ตั้งค่า Apify'; }
   else if (S.mcpState === 'reauth') { cls = 'note bad'; text = 'การเชื่อมต่อ Apify หมดอายุ เชื่อมต่อใหม่ที่ Settings → Connectors ใน claude.ai'; }
   else if (S.mcpState === 'missing') { cls = 'note bad'; text = 'บัญชี Claude นี้ยังไม่ได้เชื่อมต่อ Apify เพิ่มได้ที่ Settings → Connectors ใน claude.ai'; }
   else if (!canEdit()) text = S.dbState === 'connecting' ? 'กำลังเชื่อมต่อที่เก็บข้อมูล…' : 'มุมมองนี้บันทึกไม่ได้ จึงเพิ่ม Lead ใหม่จากการค้นหาไม่ได้';
-  else { cls = 'note ok'; text = 'พร้อมค้นหา กดปุ่มเริ่มแล้วแอปจะสั่ง Apify รันทันที ครั้งแรก Claude จะถามสิทธิ์ใช้ Apify ก่อน'; }
+  else { cls = 'note ok'; text = STANDALONE ? 'พร้อมค้นหา เชื่อมต่อ Apify ด้วย token ของเครื่องนี้แล้ว กดปุ่มเริ่มแล้วแอปจะสั่ง Apify รันทันที' : 'พร้อมค้นหา กดปุ่มเริ่มแล้วแอปจะสั่ง Apify รันทันที ครั้งแรก Claude จะถามสิทธิ์ใช้ Apify ก่อน'; }
   const ux = usageNow();
   if (cls === 'note ok' && ux && ux.full) { cls = 'note bad'; text = 'เชื่อมต่อ Apify แล้ว แต่บัญชีถึงเพดานการใช้งานรอบบิลนี้ การค้นหาจะไม่สำเร็จจนกว่าจะรีเซ็ตหรืออัปเกรดแพ็กเกจ'; }
   for (const el of $$('[data-apify-state]')) { el.className = cls; el.textContent = text + (el.id === 'apify-state' ? tip : ''); }
@@ -725,7 +738,7 @@ function renderFind(force) {
   renderJobBox();
   renderJobs();
   if (inFind()) renderCosts();
-  if (S.ui.tab === 'settings') renderSettings();
+  if (S.ui.tab === 'settings') { renderSettings(); renderDataInfo(); }
   if (S.ui.tab === 'today') renderToday();
   if (S.ui.tab === 'report') renderReport();
 }

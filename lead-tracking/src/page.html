@@ -647,9 +647,21 @@ details.week tr[data-today="1"] td{font-weight:600;color:var(--ink)}
           <div class="form">
             <h3 class="set-h">1. การเชื่อมต่อ</h3>
             <div class="note" data-apify-state>กำลังตรวจการเชื่อมต่อ Apify…</div>
-            <p class="hint">แอปนี้ใช้บัญชี Apify ที่เชื่อมไว้กับบัญชี Claude ของคุณ จะเชื่อมต่อครั้งแรก เปลี่ยนบัญชี หรือเชื่อมใหม่เมื่อหมดอายุ ทำได้ที่หน้า Connectors ของ Claude แล้วกลับมากดตรวจอีกครั้ง</p>
+            <p class="hint" data-claude>แอปนี้ใช้บัญชี Apify ที่เชื่อมไว้กับบัญชี Claude ของคุณ จะเชื่อมต่อครั้งแรก เปลี่ยนบัญชี หรือเชื่อมใหม่เมื่อหมดอายุ ทำได้ที่หน้า Connectors ของ Claude แล้วกลับมากดตรวจอีกครั้ง</p>
+            <div class="form" data-standalone hidden>
+              <p class="hint" style="margin:0">ใส่ API token ของบัญชี Apify ของคุณเอง token เก็บไว้เฉพาะในเบราว์เซอร์เครื่องนี้ ไม่ถูกส่งไปที่อื่นนอกจาก api.apify.com แต่ละเครื่องและแต่ละคนใส่ token ของตัวเอง</p>
+              <label>Apify API token
+                <input class="field num" id="ap-token" type="password" autocomplete="off" spellcheck="false" placeholder="apify_api_...">
+              </label>
+              <div class="actions">
+                <button class="btn primary" id="ap-save" type="button">บันทึก token</button>
+                <button class="btn" id="ap-remove" type="button">ลบ token จากเครื่องนี้</button>
+                <a class="btn" href="https://console.apify.com/settings/integrations" target="_blank" rel="noopener noreferrer">ดู token ของฉันใน Apify</a>
+              </div>
+              <p class="hint" style="margin:0">อย่าใส่ token ในเครื่องที่ใช้ร่วมกับคนอื่น ใครเปิดเบราว์เซอร์นี้ได้ก็ใช้ token สั่งงานในบัญชีคุณได้ ตั้งวงเงินรายเดือนในบัญชี Apify ไว้ด้วย</p>
+            </div>
             <div class="actions">
-              <a class="btn primary" id="set-connect" href="https://claude.ai/settings/connectors" target="_blank" rel="noopener noreferrer">เชื่อมต่อหรือเปลี่ยนบัญชี Apify</a>
+              <a class="btn primary" id="set-connect" data-claude href="https://claude.ai/settings/connectors" target="_blank" rel="noopener noreferrer">เชื่อมต่อหรือเปลี่ยนบัญชี Apify</a>
               <button class="btn" id="set-check" type="button">ตรวจการเชื่อมต่ออีกครั้ง</button>
               <button class="btn" id="set-perm" type="button" hidden>สิทธิ์ใช้ Apify ของหน้านี้</button>
             </div>
@@ -680,6 +692,21 @@ details.week tr[data-today="1"] td{font-weight:600;color:var(--ink)}
             <label class="check"><input type="checkbox" id="set-confirm"> ถามยืนยันอีกครั้งก่อนเริ่มการค้นหาที่มีค่าใช้จ่ายทุกครั้ง</label>
             <div class="note bad" id="set-err" hidden></div>
             <div class="actions"><button class="btn primary" id="set-save" type="button">บันทึกการตั้งค่า</button><span class="hint" id="set-saved" style="margin:0"></span></div>
+
+            <div class="form" data-standalone hidden>
+              <h3 class="set-h">4. ข้อมูลในเครื่องนี้</h3>
+              <p class="hint" style="margin:0">เวอร์ชันนี้เก็บรายชื่อและผลการติดต่อไว้ในเบราว์เซอร์เครื่องนี้เท่านั้น ไม่แชร์กับเครื่องอื่น ดาวน์โหลดไฟล์สำรองไว้เป็นระยะ ใช้ย้ายเครื่องหรือกู้คืนได้</p>
+              <div class="cost" id="data-info"></div>
+              <label>นำเข้ารายชื่อ Lead (ไฟล์ leads.json)
+                <input class="field" id="imp-leads" type="file" accept=".json,application/json">
+              </label>
+              <div class="actions">
+                <button class="btn" id="bk-save" type="button">ดาวน์โหลดไฟล์สำรอง</button>
+                <label class="btn" for="bk-load" style="display:inline-flex">กู้ข้อมูลจากไฟล์สำรอง</label>
+                <input id="bk-load" type="file" accept=".json,application/json" hidden>
+                <button class="btn" id="data-wipe" type="button">ล้างข้อมูลในเครื่องนี้</button>
+              </div>
+            </div>
           </div>
         </section>
           </div>

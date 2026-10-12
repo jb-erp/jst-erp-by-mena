@@ -2,6 +2,7 @@
 const $ = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 const enc = encodeURIComponent;
+const STANDALONE = !!window.__STANDALONE;     // the GitHub Pages build: own Apify token, data in this browser
 const fmt = n => Number(n || 0).toLocaleString('en-US');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const usd = n => '$' + (Math.round(n * 100) / 100).toFixed(2);

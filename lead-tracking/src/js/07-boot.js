@@ -93,6 +93,7 @@ function wire() {
   $('#set-save').addEventListener('click', saveSettings);
   $('#plan-daily').addEventListener('change', savePlan);
   $('#u-save').addEventListener('click', saveUsage);
+  if (STANDALONE) wireStandalone();
   $('#usage-side').addEventListener('click', () => setTab('settings'));
   $('#set-check').addEventListener('click', () => { if (!S.mcp) { toast('มุมมองนี้สั่ง Apify จากในแอปไม่ได้'); return; } S.mcpState = 'pending'; renderFind(true); checkApify().then(() => toast(S.mcpState === 'ready' ? 'เชื่อมต่อ Apify ได้' : 'ยังเชื่อมต่อ Apify ไม่ได้ ดูรายละเอียดในกรอบด้านบน')); });
   $('#set-perm').addEventListener('click', () => S.perms && S.perms.manage().catch(() => toast('เปิดหน้าสิทธิ์ไม่ได้ เปิดจากเมนู Permissions ของหน้านี้แทน')));
@@ -140,9 +141,13 @@ function restoreUi() {
 async function loadLeads() {
   S.loadError = '';
   try {
-    const res = await fetch('leads.json', { cache: 'no-cache' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
+    let data;
+    if (STANDALONE) data = window.__ltpl.leads() || { leads: [] };
+    else {
+      const res = await fetch('leads.json', { cache: 'no-cache' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      data = await res.json();
+    }
     const list = Array.isArray(data) ? data : (data && data.leads);
     if (!Array.isArray(list)) throw new Error('bad file');
     const base = [];
@@ -196,6 +201,10 @@ function initCaps() {
 }
 
 restoreUi();
+if (STANDALONE) {
+  for (const el of $$('[data-standalone]')) el.hidden = false;
+  for (const el of $$('[data-claude]')) el.hidden = true;
+}
 wire();
 renderSync();
 renderNav();

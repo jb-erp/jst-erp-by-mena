@@ -647,9 +647,21 @@ details.week tr[data-today="1"] td{font-weight:600;color:var(--ink)}
           <div class="form">
             <h3 class="set-h">1. การเชื่อมต่อ</h3>
             <div class="note" data-apify-state>กำลังตรวจการเชื่อมต่อ Apify…</div>
-            <p class="hint">แอปนี้ใช้บัญชี Apify ที่เชื่อมไว้กับบัญชี Claude ของคุณ จะเชื่อมต่อครั้งแรก เปลี่ยนบัญชี หรือเชื่อมใหม่เมื่อหมดอายุ ทำได้ที่หน้า Connectors ของ Claude แล้วกลับมากดตรวจอีกครั้ง</p>
+            <p class="hint" data-claude>แอปนี้ใช้บัญชี Apify ที่เชื่อมไว้กับบัญชี Claude ของคุณ จะเชื่อมต่อครั้งแรก เปลี่ยนบัญชี หรือเชื่อมใหม่เมื่อหมดอายุ ทำได้ที่หน้า Connectors ของ Claude แล้วกลับมากดตรวจอีกครั้ง</p>
+            <div class="form" data-standalone hidden>
+              <p class="hint" style="margin:0">ใส่ API token ของบัญชี Apify ของคุณเอง token เก็บไว้เฉพาะในเบราว์เซอร์เครื่องนี้ ไม่ถูกส่งไปที่อื่นนอกจาก api.apify.com แต่ละเครื่องและแต่ละคนใส่ token ของตัวเอง</p>
+              <label>Apify API token
+                <input class="field num" id="ap-token" type="password" autocomplete="off" spellcheck="false" placeholder="apify_api_...">
+              </label>
+              <div class="actions">
+                <button class="btn primary" id="ap-save" type="button">บันทึก token</button>
+                <button class="btn" id="ap-remove" type="button">ลบ token จากเครื่องนี้</button>
+                <a class="btn" href="https://console.apify.com/settings/integrations" target="_blank" rel="noopener noreferrer">ดู token ของฉันใน Apify</a>
+              </div>
+              <p class="hint" style="margin:0">อย่าใส่ token ในเครื่องที่ใช้ร่วมกับคนอื่น ใครเปิดเบราว์เซอร์นี้ได้ก็ใช้ token สั่งงานในบัญชีคุณได้ ตั้งวงเงินรายเดือนในบัญชี Apify ไว้ด้วย</p>
+            </div>
             <div class="actions">
-              <a class="btn primary" id="set-connect" href="https://claude.ai/settings/connectors" target="_blank" rel="noopener noreferrer">เชื่อมต่อหรือเปลี่ยนบัญชี Apify</a>
+              <a class="btn primary" id="set-connect" data-claude href="https://claude.ai/settings/connectors" target="_blank" rel="noopener noreferrer">เชื่อมต่อหรือเปลี่ยนบัญชี Apify</a>
               <button class="btn" id="set-check" type="button">ตรวจการเชื่อมต่ออีกครั้ง</button>
               <button class="btn" id="set-perm" type="button" hidden>สิทธิ์ใช้ Apify ของหน้านี้</button>
             </div>
@@ -680,6 +692,21 @@ details.week tr[data-today="1"] td{font-weight:600;color:var(--ink)}
             <label class="check"><input type="checkbox" id="set-confirm"> ถามยืนยันอีกครั้งก่อนเริ่มการค้นหาที่มีค่าใช้จ่ายทุกครั้ง</label>
             <div class="note bad" id="set-err" hidden></div>
             <div class="actions"><button class="btn primary" id="set-save" type="button">บันทึกการตั้งค่า</button><span class="hint" id="set-saved" style="margin:0"></span></div>
+
+            <div class="form" data-standalone hidden>
+              <h3 class="set-h">4. ข้อมูลในเครื่องนี้</h3>
+              <p class="hint" style="margin:0">เวอร์ชันนี้เก็บรายชื่อและผลการติดต่อไว้ในเบราว์เซอร์เครื่องนี้เท่านั้น ไม่แชร์กับเครื่องอื่น ดาวน์โหลดไฟล์สำรองไว้เป็นระยะ ใช้ย้ายเครื่องหรือกู้คืนได้</p>
+              <div class="cost" id="data-info"></div>
+              <label>นำเข้ารายชื่อ Lead (ไฟล์ leads.json)
+                <input class="field" id="imp-leads" type="file" accept=".json,application/json">
+              </label>
+              <div class="actions">
+                <button class="btn" id="bk-save" type="button">ดาวน์โหลดไฟล์สำรอง</button>
+                <label class="btn" for="bk-load" style="display:inline-flex">กู้ข้อมูลจากไฟล์สำรอง</label>
+                <input id="bk-load" type="file" accept=".json,application/json" hidden>
+                <button class="btn" id="data-wipe" type="button">ล้างข้อมูลในเครื่องนี้</button>
+              </div>
+            </div>
           </div>
         </section>
           </div>
@@ -713,6 +740,7 @@ details.week tr[data-today="1"] td{font-weight:600;color:var(--ink)}
 const $ = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 const enc = encodeURIComponent;
+const STANDALONE = !!window.__STANDALONE;     // the GitHub Pages build: own Apify token, data in this browser
 const fmt = n => Number(n || 0).toLocaleString('en-US');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const usd = n => '$' + (Math.round(n * 100) / 100).toFixed(2);
@@ -2131,9 +2159,13 @@ function explain(e, phase) {
   const code = e && e.code;
   const raw = e && e.message ? String(e.message).slice(0, 280) : '';
   switch (code) {
+    case 'network':
+      return { msg: phase === 'start' ? 'ติดต่อ Apify ไม่ได้ ตรวจอินเทอร์เน็ต แล้วดูที่ Apify Console ว่ามีการรันเกิดขึ้นหรือไม่ก่อนกดอีกครั้ง' : 'ติดต่อ Apify ไม่ได้ชั่วคราว ตรวจอินเทอร์เน็ตแล้วกดลองอีกครั้ง' };
     case 'needs_reauth':
+      if (STANDALONE) return { msg: 'Apify ไม่รับ token นี้ อาจพิมพ์ผิดหรือถูกยกเลิกไปแล้ว ใส่ token ใหม่ที่เมนู ตั้งค่า Apify', settings: true };
       return { msg: 'การเชื่อมต่อ Apify หมดอายุ เชื่อมต่อใหม่ที่ Settings → Connectors ใน claude.ai แล้วกดอีกครั้ง' };
     case 'server_not_connected': case 'selection_required': case 'server_not_found':
+      if (STANDALONE) return { msg: 'ยังไม่ได้ใส่ Apify API token ของเครื่องนี้ ใส่ได้ที่เมนู ตั้งค่า Apify ยังไม่ได้สั่งงานและไม่มีค่าใช้จ่าย', settings: true };
       return { msg: 'บัญชี Claude นี้ยังไม่ได้เชื่อมต่อ Apify หรือยังไม่ได้เลือกบัญชีที่จะใช้ ตั้งค่าได้ที่ Settings → Connectors ใน claude.ai' };
     case 'not_in_manifest': case 'consent_required':
       return { msg: 'หน้านี้ยังไม่ได้รับอนุญาตให้ใช้ Apify เปิดสิทธิ์ได้จากเมนู Permissions ของหน้านี้', manage: true };
@@ -2167,6 +2199,13 @@ async function checkApify() {
     if (!sv || (Array.isArray(sv.tools) && !sv.tools.length && sv.authStatus !== 'needs_reauth')) S.mcpState = 'missing';
     else S.mcpState = sv.authStatus === 'needs_reauth' ? 'reauth' : 'ready';
   } catch (e) { S.mcpState = 'ready'; }       // listing failed: the first call will report the real reason
+  if (STANDALONE && S.mcpState === 'ready') {
+    try {
+      const d = await window.__ltpl.limits();
+      applyUsage({ used: d.current.monthlyUsageUsd, limit: d.limits.maxMonthlyUsageUsd, start: d.monthlyUsageCycle.startAt, end: d.monthlyUsageCycle.endAt, at: new Date().toISOString(), src: 'apify' });
+      S.usageFull = false;
+    } catch (e) { if (e && e.code === 'needs_reauth') S.mcpState = 'reauth'; }
+  }
   renderFind(true);
   scheduleRender();
 }
@@ -2725,10 +2764,12 @@ function renderApifyState() {
   let cls = 'note', text, tip = '';
   if (S.mcpState === 'pending') text = 'กำลังตรวจการเชื่อมต่อ Apify…';
   else if (S.mcpState === 'absent') { text = 'มุมมองนี้สั่ง Apify จากในแอปไม่ได้'; tip = ' ใช้ช่อง "ให้ Claude ค้นแทน" ในหน้านี้ได้'; }
+  else if (STANDALONE && S.mcpState === 'missing') { cls = 'note bad'; text = 'ยังไม่ได้ใส่ Apify API token ของเครื่องนี้ ใส่ได้ที่เมนู ตั้งค่า Apify'; }
+  else if (STANDALONE && S.mcpState === 'reauth') { cls = 'note bad'; text = 'Apify ไม่รับ token ของเครื่องนี้ ใส่ token ใหม่ที่เมนู ตั้งค่า Apify'; }
   else if (S.mcpState === 'reauth') { cls = 'note bad'; text = 'การเชื่อมต่อ Apify หมดอายุ เชื่อมต่อใหม่ที่ Settings → Connectors ใน claude.ai'; }
   else if (S.mcpState === 'missing') { cls = 'note bad'; text = 'บัญชี Claude นี้ยังไม่ได้เชื่อมต่อ Apify เพิ่มได้ที่ Settings → Connectors ใน claude.ai'; }
   else if (!canEdit()) text = S.dbState === 'connecting' ? 'กำลังเชื่อมต่อที่เก็บข้อมูล…' : 'มุมมองนี้บันทึกไม่ได้ จึงเพิ่ม Lead ใหม่จากการค้นหาไม่ได้';
-  else { cls = 'note ok'; text = 'พร้อมค้นหา กดปุ่มเริ่มแล้วแอปจะสั่ง Apify รันทันที ครั้งแรก Claude จะถามสิทธิ์ใช้ Apify ก่อน'; }
+  else { cls = 'note ok'; text = STANDALONE ? 'พร้อมค้นหา เชื่อมต่อ Apify ด้วย token ของเครื่องนี้แล้ว กดปุ่มเริ่มแล้วแอปจะสั่ง Apify รันทันที' : 'พร้อมค้นหา กดปุ่มเริ่มแล้วแอปจะสั่ง Apify รันทันที ครั้งแรก Claude จะถามสิทธิ์ใช้ Apify ก่อน'; }
   const ux = usageNow();
   if (cls === 'note ok' && ux && ux.full) { cls = 'note bad'; text = 'เชื่อมต่อ Apify แล้ว แต่บัญชีถึงเพดานการใช้งานรอบบิลนี้ การค้นหาจะไม่สำเร็จจนกว่าจะรีเซ็ตหรืออัปเกรดแพ็กเกจ'; }
   for (const el of $$('[data-apify-state]')) { el.className = cls; el.textContent = text + (el.id === 'apify-state' ? tip : ''); }
@@ -2803,7 +2844,7 @@ function renderFind(force) {
   renderJobBox();
   renderJobs();
   if (inFind()) renderCosts();
-  if (S.ui.tab === 'settings') renderSettings();
+  if (S.ui.tab === 'settings') { renderSettings(); renderDataInfo(); }
   if (S.ui.tab === 'today') renderToday();
   if (S.ui.tab === 'report') renderReport();
 }
@@ -3076,6 +3117,69 @@ function renderReport() {
     barTable('คำค้นที่ได้ผล', d.terms, 'เรียงจากจำนวนรายที่สนใจ ใช้ดูว่าคำค้นไหนควรค้นเพิ่ม'));
 }
 
+/* ===================== GitHub Pages build: token, lead file, backup ===================== */
+function renderDataInfo() {
+  if (!STANDALONE) return;
+  const n = S.base.length, added = S.leads.length - S.base.length;
+  $('#data-info').replaceChildren(h('dl', { class: 'kv' },
+    h('dt', null, 'รายชื่อจากไฟล์'), h('dd', null, n ? fmt(n) + ' ราย' : 'ยังไม่ได้นำเข้า'),
+    h('dt', null, 'เพิ่มจากการค้นหาหรือเพิ่มเอง'), h('dd', null, fmt(added) + ' ราย'),
+    h('dt', null, 'Apify token'), h('dd', null, window.__ltpl.hasToken() ? 'ใส่แล้วในเครื่องนี้' : 'ยังไม่ได้ใส่')));
+}
+function readJsonFile(input) {
+  return new Promise((ok, bad) => {
+    const f = input.files && input.files[0];
+    if (!f) return bad(new Error('no file'));
+    const r = new FileReader();
+    r.onload = () => { try { ok(JSON.parse(r.result)); } catch (e) { bad(e); } };
+    r.onerror = () => bad(r.error);
+    r.readAsText(f);
+  });
+}
+function wireStandalone() {
+  $('#ap-save').addEventListener('click', () => {
+    const t = $('#ap-token').value.trim();
+    if (!/^[A-Za-z0-9_\-]{20,200}$/.test(t)) { toast('token ไม่ถูกรูปแบบ คัดลอกจากหน้า Integrations ของ Apify อีกครั้ง'); return; }
+    window.__ltpl.setToken(t);
+    $('#ap-token').value = '';
+    S.mcpState = 'pending'; renderFind(true);
+    checkApify().then(() => toast(S.mcpState === 'ready' ? 'เชื่อมต่อ Apify ด้วย token นี้ได้แล้ว' : 'Apify ไม่รับ token นี้ ตรวจแล้วใส่ใหม่'));
+  });
+  $('#ap-remove').addEventListener('click', e => confirmThen(e.target, 'ยืนยันลบ token', () => {
+    window.__ltpl.setToken('');
+    S.mcpState = 'missing'; renderFind(true); renderDataInfo();
+    toast('ลบ token จากเครื่องนี้แล้ว');
+  }));
+  $('#imp-leads').addEventListener('change', async e => {
+    try {
+      const d = await readJsonFile(e.target);
+      const list = Array.isArray(d) ? d : d && d.leads;
+      if (!Array.isArray(list) || !list.some(r => r && r.i && r.n)) throw new Error('bad');
+      window.__ltpl.setLeads({ v: 1, leads: list.filter(r => r && r.i && r.n) });
+      toast('นำเข้า ' + fmt(list.length) + ' รายแล้ว กำลังโหลดใหม่…');
+      setTimeout(() => location.reload(), 600);
+    } catch (err) { toast(err && err.code === 'quota_exceeded' ? err.message : 'อ่านไฟล์ไม่ได้ ต้องเป็นไฟล์ leads.json ของแอปนี้', 6000); }
+    e.target.value = '';
+  });
+  $('#bk-save').addEventListener('click', () => {
+    flushNote();
+    S.dl.save({ filename: 'lead-tracking-backup-' + today() + '.json', data: JSON.stringify(window.__ltpl.backup()) });
+  });
+  $('#bk-load').addEventListener('change', async e => {
+    try {
+      const b = await readJsonFile(e.target);
+      window.__ltpl.restore(b);
+      toast('กู้ข้อมูลแล้ว กำลังโหลดใหม่…');
+      setTimeout(() => location.reload(), 600);
+    } catch (err) { toast('ไฟล์นี้ไม่ใช่ไฟล์สำรองของแอปนี้', 6000); }
+    e.target.value = '';
+  });
+  $('#data-wipe').addEventListener('click', e => confirmThen(e.target, 'กดอีกครั้งเพื่อล้างทั้งหมด', () => {
+    window.__ltpl.wipe();
+    location.reload();
+  }));
+}
+
 /* ===================== export, events, start ===================== */
 function csvCell(v, free) {
   v = v == null ? '' : String(v);
@@ -3171,6 +3275,7 @@ function wire() {
   $('#set-save').addEventListener('click', saveSettings);
   $('#plan-daily').addEventListener('change', savePlan);
   $('#u-save').addEventListener('click', saveUsage);
+  if (STANDALONE) wireStandalone();
   $('#usage-side').addEventListener('click', () => setTab('settings'));
   $('#set-check').addEventListener('click', () => { if (!S.mcp) { toast('มุมมองนี้สั่ง Apify จากในแอปไม่ได้'); return; } S.mcpState = 'pending'; renderFind(true); checkApify().then(() => toast(S.mcpState === 'ready' ? 'เชื่อมต่อ Apify ได้' : 'ยังเชื่อมต่อ Apify ไม่ได้ ดูรายละเอียดในกรอบด้านบน')); });
   $('#set-perm').addEventListener('click', () => S.perms && S.perms.manage().catch(() => toast('เปิดหน้าสิทธิ์ไม่ได้ เปิดจากเมนู Permissions ของหน้านี้แทน')));
@@ -3218,9 +3323,13 @@ function restoreUi() {
 async function loadLeads() {
   S.loadError = '';
   try {
-    const res = await fetch('leads.json', { cache: 'no-cache' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
+    let data;
+    if (STANDALONE) data = window.__ltpl.leads() || { leads: [] };
+    else {
+      const res = await fetch('leads.json', { cache: 'no-cache' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      data = await res.json();
+    }
     const list = Array.isArray(data) ? data : (data && data.leads);
     if (!Array.isArray(list)) throw new Error('bad file');
     const base = [];
@@ -3274,6 +3383,10 @@ function initCaps() {
 }
 
 restoreUi();
+if (STANDALONE) {
+  for (const el of $$('[data-standalone]')) el.hidden = false;
+  for (const el of $$('[data-claude]')) el.hidden = true;
+}
 wire();
 renderSync();
 renderNav();
