@@ -72,7 +72,8 @@
   /* ---- downloads ---- */
   const downloads = {
     async save(req) {
-      const blob = new Blob([req.data], { type: /\.json$/.test(req.filename) ? 'application/json' : 'text/csv;charset=utf-8' });
+      const type = /\.json$/.test(req.filename) ? 'application/json' : /\.xlsx$/.test(req.filename) ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/csv;charset=utf-8';
+      const blob = new Blob([req.data], { type });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = req.filename;

@@ -4,13 +4,15 @@ function csvCell(v, free) {
   if (free && /^[=+\-@\t\r]/.test(v)) v = "'" + v;        // typed text must never run as a spreadsheet formula
   return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
 }
+const EXPORT_HEAD = ['ชื่อ', 'กลุ่ม', 'เกรด', 'คะแนน', 'สถานะ', 'วันนัดตามต่อ', 'โน้ต', 'โทรศัพท์', 'เว็บไซต์', 'Facebook', 'Shopee', 'Lazada', 'TikTok', 'LINE',
+    'วันที่ค้นหา', 'คำค้น', 'จังหวัด', 'โซน', 'อำเภอ/เขต', 'ที่อยู่', 'ประเภทใน Google Maps', 'คะแนน Google', 'จำนวนรีวิว', 'Google Maps', 'อัปเดตล่าสุด'];
+const exportRows = () => inFind() ? S.leads.slice().sort(SORTS.score) : S.view;
 async function exportCsv() {
   if (!S.dl || !S.loaded) return;
   flushNote();
-  const rows = inFind() ? S.leads.slice().sort(SORTS.score) : S.view;
+  const rows = exportRows();
   if (!rows.length) { toast('ไม่มีรายการให้ส่งออกในมุมมองนี้'); return; }
-  const head = ['ชื่อ', 'กลุ่ม', 'เกรด', 'คะแนน', 'สถานะ', 'วันนัดตามต่อ', 'โน้ต', 'โทรศัพท์', 'เว็บไซต์', 'Facebook', 'Shopee', 'Lazada', 'TikTok', 'LINE',
-    'วันที่ค้นหา', 'คำค้น', 'จังหวัด', 'โซน', 'อำเภอ/เขต', 'ที่อยู่', 'ประเภทใน Google Maps', 'คะแนน Google', 'จำนวนรีวิว', 'Google Maps', 'อัปเดตล่าสุด'];
+  const head = EXPORT_HEAD;
   const lines = [head.join(',')];
   for (const L of rows) {
     const t = trackOf(L.id) || {}, c = chanOf(L);
@@ -21,15 +23,84 @@ async function exportCsv() {
       L.rating == null ? '' : L.rating, L.reviews || '', csvCell(mapsUrl(L)), t.updatedAt ? fmtStamp(t.updatedAt) : '',
     ].join(','));
   }
+  await saveExport('lead-tracking-' + today() + '.csv', '﻿' + lines.join('\r\n') + '\r\n', rows.length);
+}
+async function saveExport(filename, data, n) {
   try {
-    await S.dl.save({ filename: 'warehouse-leads-' + today() + '.csv', data: '﻿' + lines.join('\r\n') + '\r\n' });
-    toast('ส่งออก ' + fmt(rows.length) + ' รายการแล้ว');
+    await S.dl.save({ filename, data });
+    toast('ส่งออก ' + fmt(n) + ' รายการแล้ว');
   } catch (e) {
     const code = e && e.code;
     if (code === 'declined') return;
     if (code === 'rate_limited') toast('มีหน้าต่างบันทึกไฟล์เปิดค้างอยู่ ปิดก่อนแล้วกดอีกครั้ง');
-    else { toast('มุมมองนี้ส่งออกไฟล์ไม่ได้'); if (code !== 'too_large' && code !== 'bad_request') $('#btn-export').hidden = true; }
+    else if (code === 'rejected_extension' || code === 'extension_not_enabled') toast('มุมมองนี้บันทึกไฟล์ Excel ไม่ได้ ใช้ปุ่ม CSV แทน', 6000);
+    else { toast('มุมมองนี้ส่งออกไฟล์ไม่ได้'); if (code !== 'too_large' && code !== 'bad_request') $('#exp').hidden = true; }
   }
+}
+
+/* ---- Excel: the spreadsheet library loads only when someone exports ---- */
+let xlsxLib = null;
+function loadXlsx() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (xlsxLib) return xlsxLib;
+  xlsxLib = new Promise((ok, bad) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = () => window.XLSX ? ok(window.XLSX) : bad(new Error('no XLSX'));
+    s.onerror = () => { xlsxLib = null; s.remove(); bad(new Error('load failed')); };
+    document.head.append(s);
+  });
+  return xlsxLib;
+}
+/* a day as an Excel date serial (days since 30 Dec 1899), so no time zone can shift it */
+const xDate = ymd => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ymd || ''); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) / 864e5 + 25569 : null; };
+function sheetFrom(X, aoa, widths, opts) {
+  const ws = X.utils.aoa_to_sheet(aoa);
+  for (const c of (opts && opts.dates) || []) for (let r = 1; r < aoa.length; r++) { const a = ws[X.utils.encode_cell({ r, c })]; if (a && a.t === 'n') a.z = 'd mmm yyyy'; }
+  ws['!cols'] = widths.map(w => ({ wch: w }));
+  if (opts && opts.filter && aoa.length > 1) ws['!autofilter'] = { ref: X.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: aoa.length - 1, c: aoa[0].length - 1 } }) };
+  return ws;
+}
+async function exportXlsx() {
+  if (!S.dl || !S.loaded) return;
+  flushNote();
+  const rows = exportRows();
+  if (!rows.length) { toast('ไม่มีรายการให้ส่งออกในมุมมองนี้'); return; }
+  const btn = $('#btn-xlsx');
+  btn.disabled = true; btn.textContent = 'กำลังสร้างไฟล์…';
+  let X;
+  try { X = await loadXlsx(); }
+  catch (e) { toast('โหลดตัวสร้างไฟล์ Excel ไม่ได้ ตรวจอินเทอร์เน็ตแล้วลองอีกครั้ง หรือใช้ปุ่ม CSV', 6000); btn.disabled = false; btn.textContent = 'ส่งออก Excel'; return; }
+  try {
+    const aoa = [EXPORT_HEAD];
+    const links = [];
+    for (const L of rows) {
+      const t = trackOf(L.id) || {}, c = chanOf(L), maps = mapsUrl(L);
+      links.push(maps);
+      aoa.push([L.name, GROUPS[L.group].name, L.grade, L.score, STATUS_BY[statusOf(L.id)].label, xDate(t.followUp), t.note || '',
+        L.local || '', L.webUrl && !L.webPlat ? L.webUrl : '', c.facebook || '', c.shopee || '', c.lazada || '', c.tiktok || '', c.line || '',
+        xDate(foundDay(L.addedAt)), L.search || '', L.prov === NOPROV ? '' : L.prov, L.zone >= 0 ? ZCODE[L.zone] : '', L.dist, L.addr, L.cat,
+        L.rating == null ? '' : L.rating, L.reviews || 0, maps, t.updatedAt ? xDate(foundDay(t.updatedAt)) : null]);
+    }
+    const ws = sheetFrom(X, aoa, [36, 26, 6, 7, 14, 13, 30, 14, 28, 24, 24, 24, 24, 16, 13, 18, 16, 6, 18, 40, 24, 9, 9, 16, 13], { filter: true, dates: [5, 14, 24] });
+    const mc = EXPORT_HEAD.indexOf('Google Maps');
+    links.forEach((u, i) => { const a = X.utils.encode_cell({ r: i + 1, c: mc }); if (ws[a]) { ws[a].v = 'เปิดแผนที่'; ws[a].l = { Target: u }; } });
+    const d = reportData();
+    const sum = [['สรุป', ''], ['ส่งออกเมื่อ', fmtStamp(new Date().toISOString())], ['จำนวนในไฟล์', rows.length], ['', ''],
+      ['ผลการติดต่อ (ทั้งสมุด)', ''], ['Lead ทั้งหมด', d.total], ['ติดต่อแล้ว', d.contacted], ['คุยได้', d.reached], ['สนใจหรือเป็นลูกค้า', d.interested], ['เป็นลูกค้าแล้ว', d.won], ['', ''],
+      ['สถานะ', 'จำนวน']];
+    const stCount = Object.create(null);
+    for (const L of S.leads) { const s = statusOf(L.id); stCount[s] = (stCount[s] || 0) + 1; }
+    for (const s of STATUS) sum.push([s.label, stCount[s.k] || 0]);
+    const found = [['วันที่ค้นหา', 'คำค้น', 'ทั้งหมด', 'ติดต่อแล้ว', 'สนใจ']].concat(d.found.map(r => [xDate(r.d), r.q, r.n, r.c, r.i]));
+    const wb = X.utils.book_new();
+    X.utils.book_append_sheet(wb, ws, 'รายชื่อ Lead');
+    X.utils.book_append_sheet(wb, sheetFrom(X, found, [14, 28, 10, 11, 8], { filter: true, dates: [0] }), 'ตามวันที่ค้นหา');
+    X.utils.book_append_sheet(wb, sheetFrom(X, sum, [26, 20]), 'สรุป');
+    const buf = X.write(wb, { bookType: 'xlsx', type: 'array', compression: true });
+    await saveExport('lead-tracking-' + today() + '.xlsx', buf, rows.length);
+  } catch (e) { toast('สร้างไฟล์ Excel ไม่สำเร็จ ลองอีกครั้ง หรือใช้ปุ่ม CSV', 6000); }
+  btn.disabled = false; btn.textContent = 'ส่งออก Excel';
 }
 
 function resetFilters() {
@@ -74,6 +145,7 @@ function wire() {
     if ($('#detail').classList.contains('open')) closeSheet();
   });
   $('#btn-export').addEventListener('click', exportCsv);
+  $('#btn-xlsx').addEventListener('click', exportXlsx);
   $('#btn-theme').addEventListener('click', () => { const t = isDark() ? 'light' : 'dark'; applyTheme(t); lsSet('leadbook.theme', t); });
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', renderThemeBtn);
   $('#btn-retry').addEventListener('click', retrySaves);
@@ -193,7 +265,7 @@ function initCaps() {
     renderSync();
     renderAll();
   });
-  use('downloads').then(d => { S.dl = d || null; $('#btn-export').hidden = !d; });
+  use('downloads').then(d => { S.dl = d || null; $('#exp').hidden = !d; });
   use('mcp').then(m => {
     S.mcp = m || null;
     S.mcpState = m ? 'ready' : 'absent';
