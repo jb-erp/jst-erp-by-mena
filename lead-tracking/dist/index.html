@@ -3022,11 +3022,16 @@ function usageNow() {
   let extra = 0;
   for (const j of S.jobs.concat(Object.values(S.localJobs))) if (j.startedAt && j.startedAt > from) extra += +j.est || 0;   // every run that started costs, kept or not
   const used = (reset ? 0 : u.used) + extra;
-  const full = (S.usageFull && !reset) || used >= u.limit - 0.005;
+  const full = !reset && (S.usageFull || used >= u.limit - 0.005);   // after the cycle ends the old figure says nothing about this one
   return { used, limit: u.limit, left: Math.max(0, u.limit - used), pct: Math.min(100, used / u.limit * 100), full, reset, extra, end: u.end, at: u.at };
 }
 function fmtD(iso) { const t = Date.parse(iso); if (isNaN(t)) return ''; const d = new Date(t + BKK); return d.getUTCDate() + ' ' + TH_MON[d.getUTCMonth()]; }
 function usageNodes(x, big) {
+  if (x.reset) return [
+    h('div', { class: 'u-top' }, h('span', { class: 'u-k' }, big ? 'เพดานการใช้งาน Apify' : 'เพดาน Apify'), h('span', { class: 'u-v' }, '? / ' + usd(x.limit))),
+    h('span', { class: 'u-sm' }, '?'),
+    h('div', { class: 'u-msg' }, 'ยอดที่บันทึกไว้เป็นของรอบบิลที่แล้ว ยังไม่รู้ยอดรอบนี้'),
+    h('div', { class: 'u-at' }, STANDALONE ? 'กดบันทึก token อีกครั้งเพื่ออ่านยอดจริง' : 'บอก Claude ว่า "อัปเดตเพดาน Apify ในแอป" หรือกรอกเองในหน้าตั้งค่า Apify')];
   const msg = x.full ? 'ถึงเพดานแล้ว ค้นหาไม่ได้จนกว่ารอบบิลจะรีเซ็ต' + (x.end ? ' (' + fmtD(new Date(Date.parse(x.end) + 1).toISOString()) + ')' : '') + ' หรืออัปเกรดแพ็กเกจ'
     : 'เหลือประมาณ ' + usd(x.left) + (x.end ? ' · รีเซ็ต ' + fmtD(new Date(Date.parse(x.end) + 1).toISOString()) : '');
   const fill = h('div', { class: 'u-fill' });
@@ -3043,7 +3048,7 @@ function renderUsage() {
   const x = usageNow(), side = $('#usage-side'), big = $('#usage-big');
   side.hidden = !x;
   if (!x) { big.replaceChildren(h('div', null, 'ยังไม่มีข้อมูลยอดใช้ของบัญชี กรอกเองด้านล่าง หรือบอก Claude ให้อัปเดต')); return; }
-  const s = x.full ? 'full' : x.pct >= 80 ? 'warn' : 'ok';
+  const s = x.reset ? 'warn' : x.full ? 'full' : x.pct >= 80 ? 'warn' : 'ok';
   side.dataset.s = s; big.dataset.s = s;
   side.replaceChildren(...usageNodes(x, false));
   big.replaceChildren(...usageNodes(x, true));
@@ -3054,7 +3059,7 @@ function renderUsage() {
 }
 function usageWarn(cap) {
   const x = usageNow();
-  if (!x) return null;
+  if (!x || x.reset) return null;
   if (x.full) return h('div', { class: 'fine warn' }, 'บัญชี Apify ถึงเพดานรอบบิลนี้แล้ว การค้นหาจะไม่สำเร็จจนกว่าจะรีเซ็ตหรืออัปเกรดแพ็กเกจ ดูที่เมนู ตั้งค่า Apify');
   if (cap > x.left) return h('div', { class: 'fine warn' }, 'วงเงินคงเหลือประมาณ ' + usd(x.left) + ' น้อยกว่าเพดานของการรันนี้ Apify อาจหยุดกลางทางและได้ผลไม่ครบ');
   return null;
