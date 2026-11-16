@@ -155,6 +155,8 @@ function wire() {
     '#b-facebook', '#b-shopee', '#b-lazada', '#b-tiktok', '#b-pages']) $(id).addEventListener('change', refreshFindForms);
   $('#g-start').addEventListener('click', () => startJob(mapsSpec()));
   $('#b-start').addEventListener('click', () => startJob(brandSpec()));
+  $('#t-start').addEventListener('click', () => startJob(ttsSpec()));
+  $('#t-n').addEventListener('input', refreshFindForms);
   $('#askmore-btn').addEventListener('click', askMoreGo);
   /* Enter in a keyword box presses that form's own search button, whose label carries the cost */
   for (const [box, btn] of [['#g-q', '#g-start'], ['#b-q', '#b-start']]) {

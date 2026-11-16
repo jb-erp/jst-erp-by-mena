@@ -9,7 +9,8 @@ const TERMINAL = new Set(['SUCCEEDED', 'FAILED', 'ABORTED', 'TIMED-OUT', 'TIMED_
 const MAPS_FIELDS = 'title,categoryName,address,city,state,phone,website,totalScore,reviewsCount,permanentlyClosed,temporarilyClosed,placeId,searchString,openingHours';
 const SUGGEST_Q = ['คลังสินค้าให้เช่า', 'ห้องเย็น', 'ศูนย์กระจายสินค้า', 'fulfillment', 'บริษัทขนส่งสินค้า', 'โกดังสินค้า', 'โรงงานผลิตเครื่องสำอาง', 'โรงงานผลิตอาหารเสริม'];
 const MAX_PLACES = 1000;
-const KIND_TAB = { gmaps: 'find', brand: 'brand', chan: 'chan' };
+const KIND_TAB = { gmaps: 'find', brand: 'brand', tts: 'brand', chan: 'chan' };
+const ACTOR_TTS = 'pro100chok/tiktok-shop-scraper-usage', PRICE_TTS = 0.002;
 const normQ = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 
 /* ---- talking to the connector ---- */
@@ -206,12 +207,12 @@ async function runJob(id) {
   if (finished) collectJob(id);
 }
 async function fetchItems(j) {
-  const serp = j.kind !== 'gmaps';
-  const page = serp ? 20 : 50, max = serp ? 400 : 1000;
+  const serp = j.kind === 'brand' || j.kind === 'chan', tts = j.kind === 'tts';
+  const page = serp ? 20 : 50, max = serp ? 400 : tts ? 400 : 1000;
   const out = [];
   for (let off = 0; off < max; off += page) {
     const p = await callApify('get-dataset-items', { datasetId: j.datasetId, limit: page, offset: off, clean: true,
-      fields: serp ? 'searchQuery,organicResults' : MAPS_FIELDS }, true);
+      fields: serp ? 'searchQuery,organicResults' : tts ? TTS_FIELDS : MAPS_FIELDS }, true);
     if (!p || !Array.isArray(p.items)) { if (off === 0) throw { code: 'bad_payload' }; break; }
     out.push(...p.items);
     if (p.items.length < page) break;
@@ -228,6 +229,7 @@ async function collectJob(id) {
   catch (e) { showJob({ phase: 'error', where: 'fetch', jobId: id, error: explain(e, 'fetch') }); return; }
   if (j.kind === 'gmaps') showJob({ phase: 'preview', jobId: id, preview: previewLeads(j, items) });
   else if (j.kind === 'brand') showJob({ phase: 'preview', jobId: id, preview: previewBrands(j, items) });
+  else if (j.kind === 'tts') showJob({ phase: 'preview', jobId: id, preview: previewTts(j, items) });
   else await applyChannels(j, items);
 }
 async function abortJob(id) {
@@ -329,7 +331,7 @@ async function importLeads(id) {
   try {
     for (let i = 0; i < fresh.length; i += 100) {
       const part = fresh.slice(i, i + 100), n = chunks;
-      await writeOnce(() => S.db.doc('batches/' + id + '-' + n).set({ src: j.kind === 'brand' ? 'web' : 'gmaps', job: id, createdAt: at, by: S.uid || null, q: pr.q || '', loc: pr.loc || '', leads: part }));
+      await writeOnce(() => S.db.doc('batches/' + id + '-' + n).set({ src: j.kind === 'brand' || j.kind === 'tts' ? 'web' : 'gmaps', job: id, createdAt: at, by: S.uid || null, q: pr.q || '', loc: pr.loc || '', leads: part }));
       chunks++;
     }
   } catch (e) {
@@ -496,6 +498,53 @@ function previewBrands(j, items) {
   return { kind: 'brand', found, fresh, dup, cut: 0, byPlat, top: fresh.slice(0, 8).map(r => ({ name: r.n, grade: PLAT[r.sp].code, prov: NOPROV })) };
 }
 
+/* ---- TikTok Shop: products from a keyword search, folded into one lead per shop ---- */
+const TTS_FIELDS = 'shopName,sellerName,sellerId,shopUrl,storefront,soldCount,formatSoldCount,salesVolume,title,productName,productUrl,query,shopRating,followersCount';
+function ttsCount() { const v = $('#t-n').value.trim(); return /^\d{1,3}$/.test(v) && +v >= 1 && +v <= 199 ? +v : 0; }
+function ttsSpec() {
+  const kw = $('#b-q').value.replace(/\s+/g, ' ').trim().slice(0, 60), n = ttsCount();
+  if (kw.length < 2 || !n) return null;
+  const est = n * PRICE_TTS + 0.01;
+  return { kind: 'tts', actor: ACTOR_TTS, est, cap: ceil2(est * 1.2 + 0.02),
+    label: 'TikTok Shop: "' + kw + '" · สินค้าขายดี ' + fmt(n) + ' รายการ',
+    input: { region: 'th', scrapeType: 'search', searchKeywords: [kw], maxItems: n, sortBy: 'best_sellers' },
+    params: { q: kw, n, ex: exWords($('#g-ex').value).slice(0, 40) } };
+}
+const soldNum = v => { if (typeof v === 'number') return v; const m = /([\d.,]+)\s*([kKmM]|พัน|หมื่น|แสน|ล้าน)?/.exec(String(v || '')); if (!m) return 0;
+  const x = parseFloat(m[1].replace(/,/g, '')) || 0, u = (m[2] || '').toLowerCase(); return Math.round(x * ({ k: 1e3, m: 1e6, 'พัน': 1e3, 'หมื่น': 1e4, 'แสน': 1e5, 'ล้าน': 1e6 }[u] || 1)); };
+function previewTts(j, items) {
+  const pr = j.params || {}, shops = new Map();
+  let found = 0, cut = 0;
+  for (const it of items) {
+    if (!it) continue;
+    found++;
+    const name = String(it.shopName || it.sellerName || '').trim();
+    if (name.length < 2) continue;
+    if (pr.ex && pr.ex.length && pr.ex.some(w => exNorm(name).includes(w))) { cut++; continue; }
+    const key = it.sellerId ? 'id:' + it.sellerId : 'n:' + exNorm(name);
+    const s = shops.get(key) || { name, url: safeUrl(it.shopUrl) || '', sold: 0, items: 0, eg: '' };
+    s.sold += soldNum(it.soldCount != null ? it.soldCount : it.formatSoldCount || it.salesVolume);
+    s.items++;
+    if (!s.eg) s.eg = String(it.title || it.productName || '').slice(0, 80);
+    shops.set(key, s);
+  }
+  const known = new Set();
+  for (const L of S.leads) { const c = chanOf(L); if (c.tiktok) known.add(urlKey(c.tiktok)); known.add(exNorm(L.name)); }
+  const fresh = [];
+  let dup = 0;
+  for (const [key, s] of shops) {
+    if ((s.url && known.has(urlKey(s.url))) || known.has(exNorm(s.name))) { dup++; continue; }
+    const raw = { i: 'tts_' + hashId(key).toString(36) + hashId(key.split('').reverse().join('')).toString(36), n: s.name.slice(0, 140), g: 5, sp: 'tiktok', ch: {}, q: pr.q || '',
+      c: 'ร้าน TikTok Shop · ขายแล้ว ~' + fmt(s.sold) + ' ชิ้น (' + s.items + ' สินค้า)' };
+    if (s.url) raw.ch.tiktok = s.url;
+    if (S.byId.has(raw.i)) { dup++; continue; }
+    fresh.push({ raw, sold: s.sold });
+  }
+  fresh.sort((a, b) => b.sold - a.sold);
+  return { kind: 'brand', found, fresh: fresh.map(x => x.raw), dup, cut, byPlat: { tiktok: fresh.length }, shops: shops.size,
+    top: fresh.slice(0, 8).map(x => ({ name: x.raw.n + ' · ขายแล้ว ~' + fmt(x.sold) + ' ชิ้น', grade: 'TT', prov: NOPROV })) };
+}
+
 /* ---- adding a lead by hand ---- */
 async function addManual() {
   const err = $('#m-err');
@@ -550,10 +599,11 @@ function previewBlock(id, ui) {
   const pv = ui.preview, j = getJob(id) || {};
   const n = pv.fresh.length;
   const kids = pv.kind === 'brand' ? [
-    h('div', null, h('div', { class: 'big' }, fmt(n)), h('div', { class: 'hint' }, 'เพจ ร้าน หรือบัญชีใหม่ จากผลค้นหา ' + fmt(pv.found) + ' รายการ')),
+    h('div', null, h('div', { class: 'big' }, fmt(n)), h('div', { class: 'hint' }, pv.shops != null ? 'ร้านใหม่ จาก ' + fmt(pv.shops) + ' ร้านในสินค้า ' + fmt(pv.found) + ' รายการ' : 'เพจ ร้าน หรือบัญชีใหม่ จากผลค้นหา ' + fmt(pv.found) + ' รายการ')),
     h('dl', { class: 'kv' },
       AUTO_PLATS.filter(k => pv.byPlat[k]).map(k => [h('dt', null, PLAT[k].label), h('dd', { class: 'num' }, fmt(pv.byPlat[k]))]),
-      h('dt', null, 'มีในสมุดแล้ว'), h('dd', { class: 'num' }, fmt(pv.dup))),
+      h('dt', null, 'มีในสมุดแล้ว'), h('dd', { class: 'num' }, fmt(pv.dup)),
+      pv.cut ? [h('dt', null, 'ตัดออก (ร้านที่ไม่เอา)'), h('dd', { class: 'num' }, fmt(pv.cut))] : null),
     h('div', { class: 'note' }, 'ชื่อมาจากหัวข้อของผลค้นหา บางรายการอาจเป็นร้านค้าปลีกหรือเพจที่ไม่ใช่แบรนด์ ตรวจในหน้ารายละเอียดแล้วตั้งสถานะ ข้อมูลไม่ตรง ได้'),
   ] : [
     h('div', null, h('div', { class: 'big' }, fmt(n)), h('div', { class: 'hint' }, 'รายการใหม่ที่ยังไม่มีในสมุด จากที่ Apify ส่งมา ' + fmt(pv.found) + ' รายการ')),
@@ -737,6 +787,13 @@ function renderCosts() {
   $('#b-cost').replaceChildren(...(bn
     ? ['ค้น ' + bp.length + ' แพลตฟอร์ม รวม ' + bn + ' หน้าผลค้นหา ประมาณ ', h('b', null, usd(best)), ' คิดหน้าละ $0.0045 ตาม' + PRICE_NOTE + ' เพดานของการรันนี้ ', h('b', null, usd(bcap))]
     : ['เลือกอย่างน้อยหนึ่งแพลตฟอร์ม']));
+  const tn = ttsCount(), ts = ttsSpec(), tEst = tn * PRICE_TTS + 0.01, tCap = ceil2(tEst * 1.2 + 0.02);
+  $('#t-cost').replaceChildren(...(tn
+    ? ['ดึง ' + fmt(tn) + ' สินค้าขายดี ประมาณ ', h('b', null, usd(tEst)), ' คิดรายการละ $0.002 เพดานของการรันนี้ ', h('b', null, usd(tCap)), ' ร้านที่ชื่อตรงกับช่อง "ไม่เอาร้าน" ในหน้า ค้นจาก Google Maps จะถูกตัดออก']
+    : ['ใส่จำนวนสินค้า 1 ถึง 199']));
+  const tb = $('#t-start');
+  tb.disabled = !(ready && ts);
+  tb.textContent = ts ? 'ค้นใน TikTok Shop (ไม่เกิน ' + usd(tCap) + ')' : 'ค้นใน TikTok Shop';
   const bb = $('#b-start');
   bb.disabled = !(ready && brandSpec());
   bb.textContent = bn ? 'เริ่มค้นหาแบรนด์ (ไม่เกิน ' + usd(bcap) + ')' : 'เริ่มค้นหาแบรนด์';
