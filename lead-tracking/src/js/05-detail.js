@@ -185,7 +185,7 @@ function buildDetail(L) {
   if (L.src === 'web') flags.push(h('span', { class: 'pill' }, 'เพิ่มจากการค้นแบรนด์ ' + fmtStamp(L.addedAt)));
   const head = h('header', { class: 't-head' },
     h('div', { class: 't-code' }, h('span', { class: 'gr big', 'data-g': L.grade, title: 'เกรดความพร้อมติดต่อ' }, L.grade), h('span', { class: 't-score' }, L.score + ' / 100')),
-    h('div', null, h('h2', { class: 't-name' }, L.name), h('div', { class: 't-meta' }, GROUPS[L.group].name), flags.length ? h('div', { class: 't-flags' }, flags) : null),
+    h('div', null, h('h2', { class: 't-name' }, L.name), h('div', { class: 't-meta' }, GROUPS[L.group].name, L.addedAt ? ' · ค้นพบเมื่อ ' + fmtFound(L.addedAt) : '', L.search ? ' · คำค้น "' + L.search + '"' : ''), flags.length ? h('div', { class: 't-flags' }, flags) : null),
     h('div', { class: 't-nav' }, navBtn(-1), navBtn(1)));
   const why = h('section', { class: 't-sec' }, h('h3', null, 'ที่มาของเกรด ' + L.grade),
     L.closed ? h('div', { class: 'note' }, 'ร้านที่ปิดถาวรได้ 0 คะแนน') : null,

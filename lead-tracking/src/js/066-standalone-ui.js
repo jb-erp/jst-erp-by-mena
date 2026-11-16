@@ -36,7 +36,7 @@ function wireStandalone() {
       const d = await readJsonFile(e.target);
       const list = Array.isArray(d) ? d : d && d.leads;
       if (!Array.isArray(list) || !list.some(r => r && r.i && r.n)) throw new Error('bad');
-      window.__ltpl.setLeads({ v: 1, leads: list.filter(r => r && r.i && r.n) });
+      window.__ltpl.setLeads({ v: 1, scrapedAt: (d && d.scrapedAt) || '', leads: list.filter(r => r && r.i && r.n) });
       toast('นำเข้า ' + fmt(list.length) + ' รายแล้ว กำลังโหลดใหม่…');
       setTimeout(() => location.reload(), 600);
     } catch (err) { toast(err && err.code === 'quota_exceeded' ? err.message : 'อ่านไฟล์ไม่ได้ ต้องเป็นไฟล์ leads.json ของแอปนี้', 6000); }

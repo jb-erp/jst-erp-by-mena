@@ -79,7 +79,7 @@ async function savePlan() {
 /* ---- results report ---- */
 const REACHED = new Set(['waiting', 'interested', 'won', 'lost']);
 function reportData() {
-  const g = GROUPS.map(x => ({ name: x.name, n: 0, c: 0, i: 0 })), prov = Object.create(null), term = Object.create(null);
+  const g = GROUPS.map(x => ({ name: x.name, n: 0, c: 0, i: 0 })), prov = Object.create(null), term = Object.create(null), found = Object.create(null);
   let contacted = 0, reached = 0, interested = 0, won = 0, tg = 0;
   const days = [];
   for (let k = 13; k >= 0; k--) days.push({ d: new Date(Date.now() + BKK - k * 864e5).toISOString().slice(0, 10), n: 0 });
@@ -95,11 +95,14 @@ function reportData() {
     const gg = g[L.group]; gg.n++; if (isC) gg.c++; if (isI) gg.i++;
     const p = prov[L.prov] || (prov[L.prov] = { name: L.prov === NOPROV ? 'ไม่ระบุจังหวัด' : L.prov, n: 0, c: 0, i: 0 }); p.n++; if (isC) p.c++; if (isI) p.i++;
     const q = L.search || (L.src === 'manual' ? 'เพิ่มเอง' : '');
+    const fd = foundDay(L.addedAt), fk = fd + '|' + (q || (L.src === 'manual' ? 'เพิ่มเอง' : '-'));
+    const fe = found[fk] || (found[fk] = { d: fd, q: fk.slice(fd.length + 1), n: 0, c: 0, i: 0 }); fe.n++; if (isC) fe.c++; if (isI) fe.i++;
     if (q) { const e = term[q] || (term[q] = { name: q, n: 0, c: 0, i: 0 }); e.n++; if (isC) e.c++; if (isI) e.i++; }
     if (t && Array.isArray(t.log)) for (const e of t.log) { const k = dayIdx[bkkDay(e.t)]; if (k != null) days[k].n++; }
   }
   return { contacted, reached, interested, won, tg, total: S.leads.length, days, groups: g.filter(x => x.n),
     provs: Object.values(prov).sort((a, b) => b.c - a.c || b.n - a.n).slice(0, 8),
+    found: Object.values(found).sort((a, b) => (b.d > a.d ? 1 : b.d < a.d ? -1 : b.n - a.n)),
     terms: Object.values(term).sort((a, b) => b.i - a.i || b.c - a.c || b.n - a.n).slice(0, 8) };
 }
 const pctTxt = (a, b) => b ? Math.round(a / b * 100) + '%' : '—';
@@ -116,6 +119,15 @@ function barTable(title, rows, note) {
           h('td', { class: 'nm' }, r.name), h('td', { class: 'r num' }, fmt(r.n)), h('td', { class: 'r num' }, fmt(r.c)), h('td', { class: 'r num' }, fmt(r.i)),
           h('td', { class: 'bar-c' }, h('span', { class: 'btrack' }, w), h('span', { class: 'bpct num' }, pctTxt(r.c, r.n))));
       }))) : h('p', { class: 'hint' }, 'ยังไม่มีข้อมูล'));
+}
+function foundTable(rows) {
+  return h('section', { class: 'rsec' }, h('h3', null, 'แยกตามวันที่ค้นหา'),
+    h('p', { class: 'hint' }, 'Lead แต่ละชุดค้นมาเมื่อไร ด้วยคำค้นอะไร และติดต่อไปแล้วเท่าไร เรียงจากวันล่าสุด'),
+    rows.length ? h('table', { class: 'btab' },
+      h('thead', null, h('tr', null, h('th', null, 'วันที่ค้นหา'), h('th', null, 'คำค้น'), h('th', { class: 'r' }, 'ทั้งหมด'), h('th', { class: 'r' }, 'ติดต่อแล้ว'), h('th', { class: 'r' }, 'สนใจ'), h('th', { class: 'r' }, 'ติดต่อแล้ว %'))),
+      h('tbody', null, rows.map(r => h('tr', null,
+        h('td', { class: 'num', style: 'white-space:nowrap' }, r.d ? fmtFound(r.d) : 'ไม่ทราบวันที่'), h('td', { class: 'nm' }, r.q),
+        h('td', { class: 'r num' }, fmt(r.n)), h('td', { class: 'r num' }, fmt(r.c)), h('td', { class: 'r num' }, fmt(r.i)), h('td', { class: 'r num' }, pctTxt(r.c, r.n)))))) : h('p', { class: 'hint' }, 'ยังไม่มีข้อมูล'));
 }
 function renderReport() {
   const d = reportData();
@@ -137,5 +149,6 @@ function renderReport() {
   $('#rep-tables').replaceChildren(
     barTable('แยกตามกลุ่มธุรกิจ', d.groups),
     barTable('จังหวัดที่ติดต่อมากที่สุด', d.provs),
+    foundTable(d.found),
     barTable('คำค้นที่ได้ผล', d.terms, 'เรียงจากจำนวนรายที่สนใจ ใช้ดูว่าคำค้นไหนควรค้นเพิ่ม'));
 }

@@ -480,7 +480,7 @@ details.week tr[data-today="1"] td{font-weight:600;color:var(--ink)}
               <option value="reviews">เรียงตามจำนวนรีวิว</option>
               <option value="follow">เรียงตามวันนัดตามต่อ</option>
               <option value="updated">เรียงตามที่อัปเดตล่าสุด</option>
-              <option value="added">เรียงตามที่เพิ่มล่าสุด</option>
+              <option value="added">เรียงตามวันที่ค้นหาล่าสุด</option>
             </select>
           </div>
           <div class="askmore" id="askmore" hidden>
@@ -778,6 +778,16 @@ const today = () => bkkNow().toISOString().slice(0, 10);
 function fmtDay(ymd) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd || '');
   return m ? (+m[3]) + ' ' + TH_MON[+m[2] - 1] : '';
+}
+/* the day a lead was found, as "11 ต.ค. 2569" (Thai Buddhist year); takes "YYYY-MM-DD" or a full timestamp */
+function foundDay(v) {
+  if (!v) return '';
+  const ymd = /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : (isNaN(Date.parse(v)) ? '' : new Date(Date.parse(v) + BKK).toISOString().slice(0, 10));
+  return ymd;
+}
+function fmtFound(v) {
+  const d = foundDay(v);
+  return d ? fmtDay(d) + ' ' + (+d.slice(0, 4) + 543) : '';
 }
 function fmtStamp(iso) {
   const t = Date.parse(iso);
@@ -2040,7 +2050,7 @@ function buildDetail(L) {
   if (L.src === 'web') flags.push(h('span', { class: 'pill' }, 'เพิ่มจากการค้นแบรนด์ ' + fmtStamp(L.addedAt)));
   const head = h('header', { class: 't-head' },
     h('div', { class: 't-code' }, h('span', { class: 'gr big', 'data-g': L.grade, title: 'เกรดความพร้อมติดต่อ' }, L.grade), h('span', { class: 't-score' }, L.score + ' / 100')),
-    h('div', null, h('h2', { class: 't-name' }, L.name), h('div', { class: 't-meta' }, GROUPS[L.group].name), flags.length ? h('div', { class: 't-flags' }, flags) : null),
+    h('div', null, h('h2', { class: 't-name' }, L.name), h('div', { class: 't-meta' }, GROUPS[L.group].name, L.addedAt ? ' · ค้นพบเมื่อ ' + fmtFound(L.addedAt) : '', L.search ? ' · คำค้น "' + L.search + '"' : ''), flags.length ? h('div', { class: 't-flags' }, flags) : null),
     h('div', { class: 't-nav' }, navBtn(-1), navBtn(1)));
   const why = h('section', { class: 't-sec' }, h('h3', null, 'ที่มาของเกรด ' + L.grade),
     L.closed ? h('div', { class: 'note' }, 'ร้านที่ปิดถาวรได้ 0 คะแนน') : null,
@@ -3056,7 +3066,7 @@ async function savePlan() {
 /* ---- results report ---- */
 const REACHED = new Set(['waiting', 'interested', 'won', 'lost']);
 function reportData() {
-  const g = GROUPS.map(x => ({ name: x.name, n: 0, c: 0, i: 0 })), prov = Object.create(null), term = Object.create(null);
+  const g = GROUPS.map(x => ({ name: x.name, n: 0, c: 0, i: 0 })), prov = Object.create(null), term = Object.create(null), found = Object.create(null);
   let contacted = 0, reached = 0, interested = 0, won = 0, tg = 0;
   const days = [];
   for (let k = 13; k >= 0; k--) days.push({ d: new Date(Date.now() + BKK - k * 864e5).toISOString().slice(0, 10), n: 0 });
@@ -3072,11 +3082,14 @@ function reportData() {
     const gg = g[L.group]; gg.n++; if (isC) gg.c++; if (isI) gg.i++;
     const p = prov[L.prov] || (prov[L.prov] = { name: L.prov === NOPROV ? 'ไม่ระบุจังหวัด' : L.prov, n: 0, c: 0, i: 0 }); p.n++; if (isC) p.c++; if (isI) p.i++;
     const q = L.search || (L.src === 'manual' ? 'เพิ่มเอง' : '');
+    const fd = foundDay(L.addedAt), fk = fd + '|' + (q || (L.src === 'manual' ? 'เพิ่มเอง' : '-'));
+    const fe = found[fk] || (found[fk] = { d: fd, q: fk.slice(fd.length + 1), n: 0, c: 0, i: 0 }); fe.n++; if (isC) fe.c++; if (isI) fe.i++;
     if (q) { const e = term[q] || (term[q] = { name: q, n: 0, c: 0, i: 0 }); e.n++; if (isC) e.c++; if (isI) e.i++; }
     if (t && Array.isArray(t.log)) for (const e of t.log) { const k = dayIdx[bkkDay(e.t)]; if (k != null) days[k].n++; }
   }
   return { contacted, reached, interested, won, tg, total: S.leads.length, days, groups: g.filter(x => x.n),
     provs: Object.values(prov).sort((a, b) => b.c - a.c || b.n - a.n).slice(0, 8),
+    found: Object.values(found).sort((a, b) => (b.d > a.d ? 1 : b.d < a.d ? -1 : b.n - a.n)),
     terms: Object.values(term).sort((a, b) => b.i - a.i || b.c - a.c || b.n - a.n).slice(0, 8) };
 }
 const pctTxt = (a, b) => b ? Math.round(a / b * 100) + '%' : '—';
@@ -3093,6 +3106,15 @@ function barTable(title, rows, note) {
           h('td', { class: 'nm' }, r.name), h('td', { class: 'r num' }, fmt(r.n)), h('td', { class: 'r num' }, fmt(r.c)), h('td', { class: 'r num' }, fmt(r.i)),
           h('td', { class: 'bar-c' }, h('span', { class: 'btrack' }, w), h('span', { class: 'bpct num' }, pctTxt(r.c, r.n))));
       }))) : h('p', { class: 'hint' }, 'ยังไม่มีข้อมูล'));
+}
+function foundTable(rows) {
+  return h('section', { class: 'rsec' }, h('h3', null, 'แยกตามวันที่ค้นหา'),
+    h('p', { class: 'hint' }, 'Lead แต่ละชุดค้นมาเมื่อไร ด้วยคำค้นอะไร และติดต่อไปแล้วเท่าไร เรียงจากวันล่าสุด'),
+    rows.length ? h('table', { class: 'btab' },
+      h('thead', null, h('tr', null, h('th', null, 'วันที่ค้นหา'), h('th', null, 'คำค้น'), h('th', { class: 'r' }, 'ทั้งหมด'), h('th', { class: 'r' }, 'ติดต่อแล้ว'), h('th', { class: 'r' }, 'สนใจ'), h('th', { class: 'r' }, 'ติดต่อแล้ว %'))),
+      h('tbody', null, rows.map(r => h('tr', null,
+        h('td', { class: 'num', style: 'white-space:nowrap' }, r.d ? fmtFound(r.d) : 'ไม่ทราบวันที่'), h('td', { class: 'nm' }, r.q),
+        h('td', { class: 'r num' }, fmt(r.n)), h('td', { class: 'r num' }, fmt(r.c)), h('td', { class: 'r num' }, fmt(r.i)), h('td', { class: 'r num' }, pctTxt(r.c, r.n)))))) : h('p', { class: 'hint' }, 'ยังไม่มีข้อมูล'));
 }
 function renderReport() {
   const d = reportData();
@@ -3114,6 +3136,7 @@ function renderReport() {
   $('#rep-tables').replaceChildren(
     barTable('แยกตามกลุ่มธุรกิจ', d.groups),
     barTable('จังหวัดที่ติดต่อมากที่สุด', d.provs),
+    foundTable(d.found),
     barTable('คำค้นที่ได้ผล', d.terms, 'เรียงจากจำนวนรายที่สนใจ ใช้ดูว่าคำค้นไหนควรค้นเพิ่ม'));
 }
 
@@ -3155,7 +3178,7 @@ function wireStandalone() {
       const d = await readJsonFile(e.target);
       const list = Array.isArray(d) ? d : d && d.leads;
       if (!Array.isArray(list) || !list.some(r => r && r.i && r.n)) throw new Error('bad');
-      window.__ltpl.setLeads({ v: 1, leads: list.filter(r => r && r.i && r.n) });
+      window.__ltpl.setLeads({ v: 1, scrapedAt: (d && d.scrapedAt) || '', leads: list.filter(r => r && r.i && r.n) });
       toast('นำเข้า ' + fmt(list.length) + ' รายแล้ว กำลังโหลดใหม่…');
       setTimeout(() => location.reload(), 600);
     } catch (err) { toast(err && err.code === 'quota_exceeded' ? err.message : 'อ่านไฟล์ไม่ได้ ต้องเป็นไฟล์ leads.json ของแอปนี้', 6000); }
@@ -3192,14 +3215,14 @@ async function exportCsv() {
   const rows = inFind() ? S.leads.slice().sort(SORTS.score) : S.view;
   if (!rows.length) { toast('ไม่มีรายการให้ส่งออกในมุมมองนี้'); return; }
   const head = ['ชื่อ', 'กลุ่ม', 'เกรด', 'คะแนน', 'สถานะ', 'วันนัดตามต่อ', 'โน้ต', 'โทรศัพท์', 'เว็บไซต์', 'Facebook', 'Shopee', 'Lazada', 'TikTok', 'LINE',
-    'จังหวัด', 'โซน', 'อำเภอ/เขต', 'ที่อยู่', 'ประเภทใน Google Maps', 'คะแนน Google', 'จำนวนรีวิว', 'Google Maps', 'อัปเดตล่าสุด'];
+    'วันที่ค้นหา', 'คำค้น', 'จังหวัด', 'โซน', 'อำเภอ/เขต', 'ที่อยู่', 'ประเภทใน Google Maps', 'คะแนน Google', 'จำนวนรีวิว', 'Google Maps', 'อัปเดตล่าสุด'];
   const lines = [head.join(',')];
   for (const L of rows) {
     const t = trackOf(L.id) || {}, c = chanOf(L);
     lines.push([
       csvCell(L.name, true), csvCell(GROUPS[L.group].name), L.grade, L.score, csvCell(STATUS_BY[statusOf(L.id)].label), t.followUp || '', csvCell(t.note, true),
       csvCell(L.local, true), csvCell(L.webUrl && !L.webPlat ? L.webUrl : ''), csvCell(c.facebook), csvCell(c.shopee), csvCell(c.lazada), csvCell(c.tiktok), csvCell(c.line, true),
-      csvCell(L.prov === NOPROV ? '' : L.prov), L.zone >= 0 ? ZCODE[L.zone] : '', csvCell(L.dist), csvCell(L.addr, true), csvCell(L.cat),
+      foundDay(L.addedAt), csvCell(L.search, true), csvCell(L.prov === NOPROV ? '' : L.prov), L.zone >= 0 ? ZCODE[L.zone] : '', csvCell(L.dist), csvCell(L.addr, true), csvCell(L.cat),
       L.rating == null ? '' : L.rating, L.reviews || '', csvCell(mapsUrl(L)), t.updatedAt ? fmtStamp(t.updatedAt) : '',
     ].join(','));
   }
@@ -3333,7 +3356,9 @@ async function loadLeads() {
     const list = Array.isArray(data) ? data : (data && data.leads);
     if (!Array.isArray(list)) throw new Error('bad file');
     const base = [];
-    for (const r of list) { if (r && r.i && r.n) base.push(makeLead(r, 'base')); }
+    /* the day the lead file was scraped; copies made before the date was kept fall back to the day of the first Apify search */
+    const fileDay = (data && !Array.isArray(data) && data.scrapedAt) || '2026-10-11';
+    for (const r of list) { if (r && r.i && r.n) base.push(makeLead(r, 'base', { at: r.d || fileDay })); }
     S.base = base;
     S.loaded = true;
   } catch (e) {

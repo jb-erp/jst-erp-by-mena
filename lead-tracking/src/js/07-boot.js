@@ -10,14 +10,14 @@ async function exportCsv() {
   const rows = inFind() ? S.leads.slice().sort(SORTS.score) : S.view;
   if (!rows.length) { toast('ไม่มีรายการให้ส่งออกในมุมมองนี้'); return; }
   const head = ['ชื่อ', 'กลุ่ม', 'เกรด', 'คะแนน', 'สถานะ', 'วันนัดตามต่อ', 'โน้ต', 'โทรศัพท์', 'เว็บไซต์', 'Facebook', 'Shopee', 'Lazada', 'TikTok', 'LINE',
-    'จังหวัด', 'โซน', 'อำเภอ/เขต', 'ที่อยู่', 'ประเภทใน Google Maps', 'คะแนน Google', 'จำนวนรีวิว', 'Google Maps', 'อัปเดตล่าสุด'];
+    'วันที่ค้นหา', 'คำค้น', 'จังหวัด', 'โซน', 'อำเภอ/เขต', 'ที่อยู่', 'ประเภทใน Google Maps', 'คะแนน Google', 'จำนวนรีวิว', 'Google Maps', 'อัปเดตล่าสุด'];
   const lines = [head.join(',')];
   for (const L of rows) {
     const t = trackOf(L.id) || {}, c = chanOf(L);
     lines.push([
       csvCell(L.name, true), csvCell(GROUPS[L.group].name), L.grade, L.score, csvCell(STATUS_BY[statusOf(L.id)].label), t.followUp || '', csvCell(t.note, true),
       csvCell(L.local, true), csvCell(L.webUrl && !L.webPlat ? L.webUrl : ''), csvCell(c.facebook), csvCell(c.shopee), csvCell(c.lazada), csvCell(c.tiktok), csvCell(c.line, true),
-      csvCell(L.prov === NOPROV ? '' : L.prov), L.zone >= 0 ? ZCODE[L.zone] : '', csvCell(L.dist), csvCell(L.addr, true), csvCell(L.cat),
+      foundDay(L.addedAt), csvCell(L.search, true), csvCell(L.prov === NOPROV ? '' : L.prov), L.zone >= 0 ? ZCODE[L.zone] : '', csvCell(L.dist), csvCell(L.addr, true), csvCell(L.cat),
       L.rating == null ? '' : L.rating, L.reviews || '', csvCell(mapsUrl(L)), t.updatedAt ? fmtStamp(t.updatedAt) : '',
     ].join(','));
   }
@@ -151,7 +151,9 @@ async function loadLeads() {
     const list = Array.isArray(data) ? data : (data && data.leads);
     if (!Array.isArray(list)) throw new Error('bad file');
     const base = [];
-    for (const r of list) { if (r && r.i && r.n) base.push(makeLead(r, 'base')); }
+    /* the day the lead file was scraped; copies made before the date was kept fall back to the day of the first Apify search */
+    const fileDay = (data && !Array.isArray(data) && data.scrapedAt) || '2026-10-11';
+    for (const r of list) { if (r && r.i && r.n) base.push(makeLead(r, 'base', { at: r.d || fileDay })); }
     S.base = base;
     S.loaded = true;
   } catch (e) {

@@ -41,6 +41,16 @@ function fmtDay(ymd) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd || '');
   return m ? (+m[3]) + ' ' + TH_MON[+m[2] - 1] : '';
 }
+/* the day a lead was found, as "11 ต.ค. 2569" (Thai Buddhist year); takes "YYYY-MM-DD" or a full timestamp */
+function foundDay(v) {
+  if (!v) return '';
+  const ymd = /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : (isNaN(Date.parse(v)) ? '' : new Date(Date.parse(v) + BKK).toISOString().slice(0, 10));
+  return ymd;
+}
+function fmtFound(v) {
+  const d = foundDay(v);
+  return d ? fmtDay(d) + ' ' + (+d.slice(0, 4) + 543) : '';
+}
 function fmtStamp(iso) {
   const t = Date.parse(iso);
   if (isNaN(t)) return '';
