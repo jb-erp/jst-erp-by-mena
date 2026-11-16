@@ -548,6 +548,11 @@ details.week tr[data-today="1"] td{font-weight:600;color:var(--ink)}
               <select class="field" id="g-group"><option value="">อัตโนมัติ ดูจากชื่อและประเภทธุรกิจ</option></select>
             </label>
             <label class="check"><input type="checkbox" id="g-nomall" checked> ตัดศูนย์การค้าและไฮเปอร์มาร์เก็ตออก</label>
+            <label>ไม่เอาร้านที่ชื่อมีคำเหล่านี้ (คั่นด้วยจุลภาค)
+              <input class="field" id="g-ex" type="text" maxlength="400" autocomplete="off">
+            </label>
+            <div class="chips" id="g-ex-chips" aria-label="ร้านเครือใหญ่ที่ตัดออกได้"></div>
+            <div class="note bad" id="g-qwarn" hidden></div>
             <div class="cost" id="g-cost"></div>
             <div class="actions"><button class="btn primary" id="g-start" type="button" disabled>เริ่มค้นหา</button></div>
           </div>

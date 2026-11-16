@@ -244,8 +244,16 @@ async function discardJob(id) {
 /* ---- Google Maps results -> new leads ---- */
 /* The area box takes anything. Blank means the whole country; a Thai province, in Thai or English, is sent
    in the English form Google Maps resolves best; any other text goes to Apify exactly as typed. */
+/* Bangkok's metropolitan region: one search per province, so every province gets its share of results */
+const PERIM = ['นนทบุรี', 'ปทุมธานี', 'สมุทรปราการ', 'สมุทรสาคร', 'นครปฐม'];
+const AREA_BKK = 'กรุงเทพและปริมณฑล', AREA_PERIM = 'ปริมณฑล (ไม่รวมกรุงเทพ)';
 function mapsLoc(text) {
   const raw = String(text == null ? $('#g-loc').value : text).replace(/\s+/g, ' ').trim().slice(0, 80);
+  if (/ปริมณฑล|metropolitan/i.test(raw)) {
+    const withBkk = !/ไม่รวม|ยกเว้น|เฉพาะปริมณฑล/.test(raw) && (/กรุงเทพ|กทม|bangkok/i.test(raw) || raw === AREA_BKK);
+    const multi = (withBkk ? ['กรุงเทพมหานคร'] : []).concat(PERIM);
+    return { query: multi.join(', '), label: withBkk ? AREA_BKK : AREA_PERIM, whole: false, multi };
+  }
   if (!raw || /^(ทั้งประเทศ(ไทย)?|ทั่วประเทศ(ไทย)?|ประเทศไทย|เมืองไทย|ไทย|thailand)$/i.test(raw)) return { query: 'Thailand', label: 'ทั้งประเทศไทย', whole: true };
   const core = raw.replace(/[,\s]*(thailand|ประเทศไทย)$/i, '').replace(/^(จังหวัด|จ\.)\s*/, '').trim();
   let th = '';
@@ -263,12 +271,30 @@ function mapsCount() {
 function mapsSpec() {
   const q = $('#g-q').value.replace(/\s+/g, ' ').trim().slice(0, 80), loc = mapsLoc(), n = mapsCount();
   if (q.length < 2 || !n) return null;
-  const est = n * PRICE_PLACE, g = $('#g-group').value;
+  const g = $('#g-group').value;
+  /* several provinces: the keyword is searched once per province, the count split evenly between them */
+  const per = loc.multi ? Math.max(1, Math.ceil(n / loc.multi.length)) : n, total = loc.multi ? per * loc.multi.length : n;
+  const est = total * PRICE_PLACE;
+  const input = loc.multi
+    ? { searchStringsArray: loc.multi.map(p => q + ' ' + p), countryCode: 'th', language: 'th', maxCrawledPlacesPerSearch: per, maxReviews: 0, maxImages: 0 }
+    : { searchStringsArray: [q], locationQuery: loc.query, language: 'th', maxCrawledPlacesPerSearch: n, maxReviews: 0, maxImages: 0 };
   return { kind: 'gmaps', actor: ACTOR_MAPS, est, cap: ceil2(est * 1.15 + 0.01),
-    label: 'Google Maps: "' + q + '" · ' + loc.label + ' · สูงสุด ' + fmt(n) + ' ร้าน',
-    input: { searchStringsArray: [q], locationQuery: loc.query, language: 'th',
-      maxCrawledPlacesPerSearch: n, maxReviews: 0, maxImages: 0 },
-    params: { q, loc: loc.label, n, nomall: $('#g-nomall').checked, g: g === '' ? null : +g } };
+    label: 'Google Maps: "' + q + '" · ' + loc.label + ' · สูงสุด ' + fmt(total) + ' ร้าน',
+    input,
+    params: { q, loc: loc.label, n: total, multi: !!loc.multi, nomall: $('#g-nomall').checked, ex: exWords($('#g-ex').value).slice(0, 40), g: g === '' ? null : +g } };
+}
+/* chain stores people usually do not want as leads; the form starts with Makro and Go Wholesale */
+const EX_DEFAULT = 'แม็คโคร, Makro, โก โฮลเซลล์, Go Wholesale';
+const EX_CHIPS = [['แม็คโคร', 'แม็คโคร, Makro'], ['โก โฮลเซลล์', 'โก โฮลเซลล์, Go Wholesale'], ['โลตัส', 'โลตัส, Lotus'], ['บิ๊กซี', 'บิ๊กซี, Big C'], ['ท็อปส์', 'ท็อปส์, Tops'], ['เซเว่น', 'เซเว่น, 7-Eleven'], ['วัตสัน', 'วัตสัน, Watsons'], ['ยูนิโคล่', 'ยูนิโคล่, Uniqlo']];
+const exNorm = s => String(s || '').toLowerCase().replace(/[\s\-'’.]+/g, '');
+const exWords = text => String(text || '').split(/[,，\n]+/).map(exNorm).filter(w => w.length >= 2);
+function exList() { return $('#g-ex').value.split(/[,，]+/).map(s => s.trim()).filter(Boolean); }
+function toggleEx(words) {
+  const cur = exList(), add = words.split(',').map(s => s.trim()), has = add.every(w => cur.some(c => exNorm(c) === exNorm(w)));
+  const next = has ? cur.filter(c => !add.some(w => exNorm(w) === exNorm(c))) : cur.concat(add.filter(w => !cur.some(c => exNorm(c) === exNorm(w))));
+  $('#g-ex').value = next.join(', ');
+  lsSet('leadbook.ex', $('#g-ex').value);
+  refreshFindForms();
 }
 function previewLeads(j, items) {
   const fresh = [], seen = new Set();
@@ -276,8 +302,10 @@ function previewLeads(j, items) {
   const pr = j.params || {};
   for (const it of items) {
     const raw = rawFromPlace(it, pr.q);
+    if (raw && pr.multi) raw.q = pr.q;          // one keyword searched in several provinces counts as one search term
     if (!raw) { bad++; continue; }
     if (pr.nomall && CAT_MALL.has(raw.c || '')) { cut++; continue; }
+    if (pr.ex && pr.ex.length) { const nm = exNorm(raw.n); if (pr.ex.some(w => nm.includes(w))) { cut++; continue; } }
     if (S.byId.has(raw.i) || seen.has(raw.i)) { dup++; continue; }
     if (Number.isInteger(pr.g) && GROUPS[pr.g]) raw.g = pr.g;      // the group picked on the form, for searches outside the usual trades
     seen.add(raw.i);
@@ -531,7 +559,7 @@ function previewBlock(id, ui) {
     h('div', null, h('div', { class: 'big' }, fmt(n)), h('div', { class: 'hint' }, 'รายการใหม่ที่ยังไม่มีในสมุด จากที่ Apify ส่งมา ' + fmt(pv.found) + ' รายการ')),
     h('dl', { class: 'kv' },
       h('dt', null, 'ซ้ำกับที่มีอยู่'), h('dd', { class: 'num' }, fmt(pv.dup)),
-      pv.cut ? [h('dt', null, 'ศูนย์การค้าที่ตัดออก'), h('dd', { class: 'num' }, fmt(pv.cut))] : null,
+      pv.cut ? [h('dt', null, 'ตัดออก (ศูนย์การค้าและร้านที่ไม่เอา)'), h('dd', { class: 'num' }, fmt(pv.cut))] : null,
       h('dt', null, 'อยู่ในกลุ่มเป้าหมาย'), h('dd', { class: 'num' }, fmt(pv.target)),
       h('dt', null, 'มีเบอร์โทร'), h('dd', { class: 'num' }, fmt(pv.phone)),
       h('dt', null, 'เกรด A / B / C / D'), h('dd', { class: 'num' }, [pv.byGrade.A, pv.byGrade.B, pv.byGrade.C, pv.byGrade.D].join(' / '))),
@@ -671,16 +699,18 @@ function renderApifyState() {
 function chanPlats() { return AUTO_PLATS.filter(k => $('#c-' + k).checked); }
 function renderCosts() {
   const ready = !!S.mcp && S.mcpState === 'ready' && canEdit() && !jobBusy();
-  const n = mapsCount(), q = $('#g-q').value.replace(/\s+/g, ' ').trim(), loc = mapsLoc();
+  const n0 = mapsCount(), q = $('#g-q').value.replace(/\s+/g, ' ').trim(), loc = mapsLoc();
+  const per = loc.multi && n0 ? Math.max(1, Math.ceil(n0 / loc.multi.length)) : n0, n = loc.multi ? per * loc.multi.length : n0;
   const est = n * PRICE_PLACE, cap = ceil2(est * 1.15 + 0.01);
   $('#g-cost').replaceChildren(
     h('dl', { class: 'kv' },
       h('dt', null, 'Actor'), h('dd', null, ACTOR_MAPS),
       h('dt', null, 'ค้นคำว่า'), h('dd', null, q.length >= 2 ? '"' + q + '"' : 'ยังไม่ได้พิมพ์คำค้น'),
-      h('dt', null, 'location'), h('dd', null, loc.query),
+      h('dt', null, 'location'), h('dd', null, loc.multi ? loc.multi.join(', ') + ' (ค้นแยกจังหวัดละ ' + fmt(per) + ' ร้าน)' : loc.query),
       h('dt', null, 'ภาษา'), h('dd', null, 'th'),
       h('dt', null, 'จำนวน'), h('dd', null, n ? 'สูงสุด ' + fmt(n) + ' ร้าน' : '—'),
       h('dt', null, 'ไม่ดึง'), h('dd', null, 'รีวิว รูป add-on'),
+      h('dt', null, 'ไม่เอาร้าน'), h('dd', null, exList().length ? exList().join(', ') : '—'),
       h('dt', null, 'ค่าใช้จ่าย'), h('dd', null, n ? ['ประมาณ ', h('b', null, usd(est)), ' เพดาน ', h('b', null, usd(cap))] : '—')),
     n ? h('div', { class: 'fine' }, 'คิดร้านละ $0.004 ตาม' + PRICE_NOTE + ' ถ้าเจอร้านน้อยกว่าที่ตั้งไว้ จ่ายตามจำนวนที่ได้จริง การรันจะหยุดเองเมื่อถึงเพดาน'
         + (loc.whole ? ' การค้นทั้งประเทศแบบจำกัดจำนวน ผลมักกระจุกอยู่ไม่กี่จังหวัด ใส่จังหวัดจะตรงพื้นที่กว่า' : '')
@@ -728,7 +758,15 @@ function updateProspectLinks() {
     ext(PLAT.shopee.search(q), 'ร้านใน Shopee', 'btn sm'), ext(PLAT.lazada.search(q), 'Lazada', 'btn sm'),
     ext(PLAT.tiktok.search(q), 'บัญชี TikTok', 'btn sm'), ext(PLAT.facebook.search(q), 'เพจ Facebook', 'btn sm'), ext(googleUrl(q), 'Google', 'btn sm'));
 }
-function refreshFindForms() { renderCosts(); updateAsk(); updateProspectLinks(); }
+function refreshFindForms() {
+  /* a group name typed as the keyword searches Google Maps for that literal text and brings back unrelated shops */
+  const q = $('#g-q').value.replace(/\s+/g, ' ').trim(), w = $('#g-qwarn');
+  const isGroup = q && GROUPS.some(g => g.name === q || g.short === q) || /\//.test(q);
+  w.hidden = !isGroup;
+  if (isGroup) w.textContent = 'คำนี้เป็นชื่อกลุ่มในแอป Google Maps จะค้นตามตัวอักษรและได้ร้านที่ไม่เกี่ยวข้อง ให้พิมพ์ประเภทธุรกิจจริง เช่น "แบรนด์เครื่องสำอาง" หรือ "โรงงานผลิตเสื้อผ้า" แล้วเลือกกลุ่มในช่องจัดผลลัพธ์เข้ากลุ่มแทน';
+  for (const c of $$('#g-ex-chips .chip')) { const add = c.dataset.v.split(','); c.setAttribute('aria-pressed', String(add.every(x => exList().some(e => exNorm(e) === exNorm(x))))); }
+  renderCosts(); updateAsk(); updateProspectLinks();
+}
 function renderFind(force) {
   if (!S.loaded) return;
   renderJobFlags();
@@ -850,14 +888,16 @@ function fmtYm(iso) { const t = Date.parse(iso); return isNaN(t) ? '' : new Date
 function fillFindOptions() {
   const mp = $('#m-prov'), keepM = mp.value;
   const provs = PROV_LIST.slice().sort((a, b) => collator.compare(a, b));
-  $('#g-loc-list').replaceChildren(h('option', { value: 'ทั้งประเทศไทย' }), ...provs.map(p => h('option', { value: p })));
+  $('#g-loc-list').replaceChildren(h('option', { value: 'ทั้งประเทศไทย' }), h('option', { value: AREA_BKK }), h('option', { value: AREA_PERIM }), ...provs.map(p => h('option', { value: p })));
   const count = Object.create(null);
   for (const L of S.base) if (PROV_EN[L.prov]) count[L.prov] = (count[L.prov] || 0) + 1;
   const top = Object.keys(count).sort((a, b) => count[b] - count[a]).slice(0, 6);
-  $('#g-loc-chips').replaceChildren(...['ทั้งประเทศไทย'].concat(top).map(p => h('button', { class: 'chip', type: 'button', 'data-v': p, 'aria-pressed': 'false',
+  $('#g-loc-chips').replaceChildren(...['ทั้งประเทศไทย', AREA_BKK, AREA_PERIM].concat(top).map(p => h('button', { class: 'chip', type: 'button', 'data-v': p, 'aria-pressed': 'false',
     onclick: () => { $('#g-loc').value = p; refreshFindForms(); } }, p)));
   $('#g-n-chips').replaceChildren(...[20, 50, 100, 200, 500].map(n => h('button', { class: 'chip num', type: 'button', 'data-v': String(n), 'aria-pressed': 'false',
     onclick: () => { $('#g-n').value = String(n); refreshFindForms(); } }, String(n))));
+  if (!$('#g-ex').value) { const ex = lsGet('leadbook.ex'); $('#g-ex').value = typeof ex === 'string' ? ex : EX_DEFAULT; }
+  $('#g-ex-chips').replaceChildren(...EX_CHIPS.map(([label, words]) => h('button', { class: 'chip', type: 'button', 'data-v': words, 'aria-pressed': 'false', onclick: () => toggleEx(words) }, label)));
   const gg = $('#g-group'), keepG = gg.value;
   gg.replaceChildren(h('option', { value: '' }, 'อัตโนมัติ ดูจากชื่อและประเภทธุรกิจ'), ...GROUPS.map((g, i) => h('option', { value: String(i) }, g.name)));
   gg.value = keepG;

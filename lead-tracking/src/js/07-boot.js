@@ -165,6 +165,7 @@ function wire() {
   $('#set-save').addEventListener('click', saveSettings);
   $('#plan-daily').addEventListener('change', savePlan);
   $('#u-save').addEventListener('click', saveUsage);
+  $('#g-ex').addEventListener('input', () => { lsSet('leadbook.ex', $('#g-ex').value); refreshFindForms(); });
   if (STANDALONE) wireStandalone();
   $('#usage-side').addEventListener('click', () => setTab('settings'));
   $('#set-check').addEventListener('click', () => { if (!S.mcp) { toast('มุมมองนี้สั่ง Apify จากในแอปไม่ได้'); return; } S.mcpState = 'pending'; renderFind(true); checkApify().then(() => toast(S.mcpState === 'ready' ? 'เชื่อมต่อ Apify ได้' : 'ยังเชื่อมต่อ Apify ไม่ได้ ดูรายละเอียดในกรอบด้านบน')); });
